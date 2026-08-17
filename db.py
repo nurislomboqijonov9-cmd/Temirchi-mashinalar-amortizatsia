@@ -39,8 +39,22 @@ def init_db():
             olindi INTEGER DEFAULT 0,
             sotilsa INTEGER DEFAULT 0,
             oylik INTEGER DEFAULT 0,
-            amort INTEGER DEFAULT 50
+            amort INTEGER DEFAULT 50,
+            b_kirim INTEGER DEFAULT 0,
+            b_chiqim INTEGER DEFAULT 0,
+            b_oylik INTEGER DEFAULT 0,
+            b_sana TEXT
         )""")
+        # eski cars jadvaliga boshlang'ich ustunlar (migration)
+        try:
+            ccols = [r[1] for r in c.execute("PRAGMA table_info(cars)").fetchall()]
+            for col in ["b_kirim","b_chiqim","b_oylik"]:
+                if col not in ccols:
+                    c.execute(f"ALTER TABLE cars ADD COLUMN {col} INTEGER DEFAULT 0")
+            if "b_sana" not in ccols:
+                c.execute("ALTER TABLE cars ADD COLUMN b_sana TEXT")
+        except Exception as e:
+            print("migration cars:", e)
         # yozuvlar (yolkira/xarajat)
         c.execute("""CREATE TABLE IF NOT EXISTS logs(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,7 +163,7 @@ def add_car(name, raqam, driver, olindi=0, oylik=0, amort=50):
         return cur.lastrowid
 
 def update_car(car_id, field, value):
-    if field not in ("name","raqam","driver","olindi","sotilsa","oylik","amort"):
+    if field not in ("name","raqam","driver","olindi","sotilsa","oylik","amort","b_kirim","b_chiqim","b_oylik","b_sana"):
         return
     with _lock, _conn() as c:
         c.execute(f"UPDATE cars SET {field}=? WHERE id=?", (value, car_id))
@@ -209,3 +223,20 @@ def set_setting(k, v):
         c.execute("INSERT INTO settings(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?",
                   (k, str(v), str(v)))
         c.commit()
+
+def add_amort_for_month(kurs, ym):
+    """Har moshinaga oylik eskirishni salary jadvaliga 'eskirish' turida yozadi.
+    ym = 'YYYY-MM' — shu oy uchun bir marta yoziladi (dublikat bo'lmasin)."""
+    if get_setting("amort_done_"+ym):
+        return 0
+    n = 0
+    with _lock, _conn() as c:
+        cars = c.execute("SELECT id, amort FROM cars").fetchall()
+        for car in cars:
+            summa = int((car["amort"] or 50) * kurs)
+            c.execute("INSERT INTO salary(car_id,t,amt,note,ts) VALUES(?,?,?,?,?)",
+                      (car["id"], "eskirish", summa, ym+" eskirishi", int(time.time())))
+            n += 1
+        c.commit()
+    set_setting("amort_done_"+ym, "1")
+    return n

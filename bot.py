@@ -192,7 +192,8 @@ def daily_report():
     send(OWNER_ID, "\n".join(lines))
 
 def report_scheduler():
-    """Har kuni 19:30 (Toshkent) hisobot yuboradi."""
+    """Har kuni 19:30 hisobot; oy oxirida eskirish qo'shadi (Toshkent)."""
+    import calendar
     sent_today = None
     while True:
         try:
@@ -200,9 +201,12 @@ def report_scheduler():
             t = time.time() + tz
             lt = time.gmtime(t)
             key = time.strftime("%Y-%m-%d", lt)
+            # 19:30 kunlik hisobot
             if lt.tm_hour == 19 and lt.tm_min == 30 and sent_today != key:
                 daily_report()
                 sent_today = key
+            # eskirish endi ishlagan vaqtiga qarab ilovada avtomat hisoblanadi
+            # (oy oxirida yozuv qo'shish kerak emas)
         except Exception as e:
             print("report err", e)
         time.sleep(30)
