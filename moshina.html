@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TEMIRCHI — Moshina hisobot</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#17222e; --panel2:#1e2c3a; --line:#2a3b4d;
@@ -1072,19 +1073,41 @@ document.getElementById('salCancel').addEventListener('click',()=>document.getEl
 document.getElementById('salSave').addEventListener('click',saveSal);
 document.getElementById('salModal').addEventListener('click',e=>{if(e.target.id==='salModal')document.getElementById('salModal').classList.remove('on');});
 document.getElementById('roleBtn').addEventListener('click',()=>{if(ROLE==="ega"){ROLE="haydovchi";CURDRIVER=1;}else{if(CURDRIVER<CARS.length)CURDRIVER++;else ROLE="ega";}applyRole();});
-// kattalashtirish (fullscreen)
+// kattalashtirish (fullscreen) — Telegram ichida yoki brauzerda
+const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+let tgFull = false;
 document.getElementById('fsBtn').addEventListener('click',()=>{
+  const btn = document.getElementById('fsBtn');
+  // Telegram ichida bo'lsa -> Telegram fullscreen
+  if(TG && TG.platform && TG.platform!=='unknown'){
+    try{
+      if(!tgFull){
+        if(TG.requestFullscreen) TG.requestFullscreen();
+        else if(TG.expand) TG.expand();
+        tgFull=true; btn.textContent='⤡';
+      } else {
+        if(TG.exitFullscreen) TG.exitFullscreen();
+        tgFull=false; btn.textContent='⛶';
+      }
+    }catch(e){ try{ TG.expand(); }catch(_){} }
+    return;
+  }
+  // Brauzerda -> oddiy fullscreen
   if(!document.fullscreenElement){
     document.documentElement.requestFullscreen().catch(()=>{});
-    document.getElementById('fsBtn').textContent='⤡';
+    btn.textContent='⤡';
   } else {
     document.exitFullscreen().catch(()=>{});
-    document.getElementById('fsBtn').textContent='⛶';
+    btn.textContent='⛶';
   }
 });
 document.addEventListener('fullscreenchange',()=>{
   document.getElementById('fsBtn').textContent = document.fullscreenElement ? '⤡' : '⛶';
 });
+// Telegram ichida ochilganda avtomat kengaytirish
+if(TG){
+  try{ TG.ready(); TG.expand(); }catch(e){}
+}
 
 // kurs
 document.getElementById('kursVal').textContent=fmt(KURS);
