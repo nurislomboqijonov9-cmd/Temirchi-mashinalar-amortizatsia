@@ -7,6 +7,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#17222e; --panel2:#1e2c3a; --line:#2a3b4d;
@@ -167,6 +168,8 @@
   .ssilka-result{margin-top:12px;padding:12px;background:#131c26;border:1px solid var(--green);border-radius:10px;display:none}
   .ssilka-result.show{display:block}
   .ssilka-url{color:var(--steel);font-size:12px;word-break:break-all;margin:6px 0}
+  .stop-tip{background:#c0392b!important;color:#fff!important;border:2px solid #fff!important;border-radius:10px!important;padding:2px 8px!important;font-weight:800!important;font-size:12px!important;box-shadow:0 2px 6px rgba(0,0,0,.5)!important}
+  .stop-tip:before{border-top-color:#c0392b!important}
 </style>
 </head>
 <body>
@@ -1126,7 +1129,6 @@ async function gShowMap(cid){
   document.getElementById('gmapName').textContent=(h.ism||h.moshina)+' · '+h.moshina;
   document.getElementById('gmapSub').textContent=h.raqam||'';
   document.getElementById('gmapModal').classList.add('on');
-  // kunlik yo'l serverdan
   let xul={};
   try{ const r=await fetch('/api/haydovchi_kuzat?code='+encodeURIComponent(CODE())+'&id='+cid); xul=await r.json(); }catch(e){}
   document.getElementById('gstKm').textContent=(xul.km!=null?xul.km+' km':'—');
@@ -1139,18 +1141,42 @@ async function gShowMap(cid){
   setTimeout(()=>{
     if(typeof L==='undefined'){ document.getElementById('gmap').innerHTML='<div style="padding:40px;text-align:center;color:#8ba0b3">Xarita yuklanmadi (internet kerak)</div>'; return; }
     if(gmap) gmap.remove();
-    const pts=(xul.nuqtalar||[]).map(p=>[p.lat,p.lon]);
-    const center = pts.length?pts[pts.length-1]:[41.31,69.24];
+    const pts=(xul.nuqtalar||[]);
+    const line=pts.map(p=>[p.lat,p.lon]);
+    const stops=(xul.toxtashlar||[]);
+    const center = line.length?line[line.length-1]:[41.31,69.24];
     gmap=L.map('gmap',{zoomControl:true,attributionControl:false}).setView(center,13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(gmap);
-    if(pts.length){
-      L.polyline(pts,{color:'#3d6d94',weight:5,opacity:.8}).addTo(gmap);
-      L.marker(pts[pts.length-1]).addTo(gmap).bindPopup('🚚 '+(h.ism||h.moshina)+' (hozir)');
-      (xul.toxtashlar||[]).forEach(s=>L.circleMarker([s.lat,s.lon],{radius:7,color:'#e0a14a',fillColor:'#e0a14a',fillOpacity:.8}).addTo(gmap).bindPopup('🕐 '+s.daqiqa+' daqiqa'));
-      try{ gmap.fitBounds(pts,{padding:[40,40]}); }catch(e){}
-    } else {
+    const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(gmap);
+    const sput=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+    L.control.layers({"Ko'cha":kocha,"Sputnik":sput},null,{position:'topright'}).addTo(gmap);
+    if(!line.length){
       L.popup().setLatLng(center).setContent('Bugun GPS ma\'lumot yo\'q').openOn(gmap);
+      return;
     }
+    // 1) ISSIQLIK (heatmap) — to'xtaган joyда qiziradi
+    try{
+      if(L.heatLayer){
+        const hp=pts.map(p=>[p.lat,p.lon,0.25]);
+        stops.forEach(s=>{ const w=Math.min(3.5,0.8+s.daqiqa/16); for(let k=0;k<Math.ceil(s.daqiqa/2.5);k++) hp.push([s.lat,s.lon,w]); });
+        L.heatLayer(hp,{radius:24,blur:18,maxZoom:17,minOpacity:.22,
+          gradient:{0.3:'#2c7bb6',0.5:'#00ccbc',0.7:'#ffd93b',0.85:'#fb8c00',1.0:'#e53935'}}).addTo(gmap);
+      }
+    }catch(e){}
+    // 2) YO'L chizig'i (qora kant + oq chiziq — aniq)
+    L.polyline(line,{color:'#06233d',weight:8,opacity:.6}).addTo(gmap);
+    L.polyline(line,{color:'#ffffff',weight:4,opacity:.95}).addTo(gmap);
+    // boshi / oxiri
+    L.circleMarker(line[0],{radius:7,color:'#fff',fillColor:'#2ecc71',fillOpacity:1,weight:2}).bindPopup('▶️ Boshi '+((pts[0].vaqt||'').slice(11,16))).addTo(gmap);
+    // 3) MOSHINA belgisi — hozirgi joy (oxirgi nuqta)
+    L.marker(line[line.length-1],{icon:L.divIcon({className:'',html:'<div style="font-size:28px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))">🚚</div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(gmap).bindPopup('🚚 '+(h.ism||h.moshina)+' (hozir)');
+    // 4) TO'XTASHLAR — tepasida necha daqiqa
+    stops.forEach(s=>{
+      L.tooltip({permanent:true,direction:'top',offset:[0,-6],className:'stop-tip'})
+        .setContent(s.daqiqa+' daq').setLatLng([s.lat,s.lon]).addTo(gmap);
+      L.circleMarker([s.lat,s.lon],{radius:6,color:'#fff',fillColor:'#c0392b',fillOpacity:1,weight:2})
+        .bindPopup('🛑 <b>'+s.daqiqa+' daqiqa</b><br>'+((s.boshlanish||'').slice(11,16))+' – '+((s.tugash||'').slice(11,16))).addTo(gmap);
+    });
+    try{ gmap.fitBounds(line,{padding:[50,50]}); }catch(e){}
   },200);
 }
 

@@ -431,6 +431,13 @@ def yetkazish_get(token):
         r=c.execute("SELECT * FROM yetkazish WHERE token=?", (token,)).fetchone()
         return dict(r) if r else None
 
+def yetkazish_faol_car(car_id):
+    """Moshinaga biriktirilgan faol (yakunlanmagan) yetkazish."""
+    with _conn() as c:
+        r=c.execute("SELECT * FROM yetkazish WHERE car_id=? AND holat='faol' ORDER BY created DESC LIMIT 1",
+                    (car_id,)).fetchone()
+        return dict(r) if r else None
+
 def yetkazish_yakunla(token):
     with _lock, _conn() as c:
         c.execute("UPDATE yetkazish SET holat='yakunlandi', yakun=? WHERE token=?", (now_tk().isoformat(),token))

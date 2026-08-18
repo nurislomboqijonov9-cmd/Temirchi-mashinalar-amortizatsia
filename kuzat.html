@@ -157,7 +157,7 @@ function chiz(pt){
   if(!map || typeof L==='undefined') return;
   try{
     if(!marker){
-      marker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="pin"></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map);
+      marker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div style="font-size:30px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">🚚</div>',iconSize:[34,34],iconAnchor:[17,17]})}).addTo(map);
       acirc=L.circle(ll,{radius:pt.acc||20,color:'#39d98a',weight:1,fillColor:'#39d98a',fillOpacity:.1}).addTo(map);
     }else{ marker.setLatLng(ll); acirc.setLatLng(ll); acirc.setRadius(pt.acc||20); }
     if(trail) trail.setLatLngs(tpts);
@@ -188,9 +188,64 @@ async function flush(){
   const keys=items.map(x=>x.k);
   try{
     const r=await fetch('/api/gps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,points})});
-    if(r.ok){ await idbClear('pts',keys); updateOff(0); flushPul(); }
+    if(r.ok){
+      await idbClear('pts',keys); updateOff(0); flushPul();
+      const d=await r.json().catch(()=>({}));
+      handleYetkazish(d.yetkazish, points[points.length-1]);
+    }
     else updateOff(items.length);
   }catch(e){ updateOff(items.length); }
+}
+
+// ==== YETKAZISH — mijozga yo'l ko'rsatish (Yandex kabi) ====
+let mijozMk=null, yolLine=null, yetkazishBox=null;
+async function handleYetkazish(y, oxirgi){
+  if(!y){
+    // yetkazish yo'q — tozalash
+    if(mijozMk&&map){ map.removeLayer(mijozMk); mijozMk=null; }
+    if(yolLine&&map){ map.removeLayer(yolLine); yolLine=null; }
+    if(yetkazishBox){ yetkazishBox.remove(); yetkazishBox=null; }
+    return;
+  }
+  if(!map || typeof L==='undefined' || !oxirgi) return;
+  // mijoz markeri
+  const mll=[y.lat,y.lon];
+  if(!mijozMk){ mijozMk=L.marker(mll,{icon:L.divIcon({className:'',html:'<div style="font-size:28px">📍</div>',iconSize:[28,28],iconAnchor:[14,28]})}).addTo(map).bindTooltip('Mijoz'+(y.izoh?': '+y.izoh:''),{permanent:false}); }
+  else mijozMk.setLatLng(mll);
+  // yo'l (OSRM)
+  try{
+    const u=`https://router.project-osrm.org/route/v1/driving/${oxirgi.lon},${oxirgi.lat};${y.lon},${y.lat}?overview=full&geometries=geojson`;
+    const rr=await fetch(u); const dd=await rr.json();
+    if(dd.routes&&dd.routes[0]){
+      const coords=dd.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+      if(yolLine) map.removeLayer(yolLine);
+      yolLine=L.polyline(coords,{color:'#2a6df0',weight:6,opacity:.8}).addTo(map);
+      const daq=Math.max(1,Math.round(dd.routes[0].duration/60));
+      const km=(dd.routes[0].distance/1000).toFixed(1);
+      showYetkazish(daq,km,y.izoh);
+    }
+  }catch(e){}
+}
+function showYetkazish(daq,km,izoh){
+  if(!yetkazishBox){
+    yetkazishBox=document.createElement('div');
+    yetkazishBox.style.cssText='position:fixed;top:56px;left:12px;right:12px;z-index:15;background:#16232eef;backdrop-filter:blur(8px);border:1px solid #2a6df0;border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.5)';
+    document.body.appendChild(yetkazishBox);
+  }
+  yetkazishBox.innerHTML=`<div style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:26px">📦</div>
+    <div style="flex:1"><div style="font-weight:800;font-size:15px;color:#5b9bf0">Mijozga yetkazish${izoh?' · '+izoh:''}</div>
+      <div style="font-size:13px;color:#8aa0a8">🕐 <b style="color:#eaf2ee">${daq} daqiqa</b> · 📏 ${km} km</div></div>
+    <button onclick="yetkazishYetdi()" style="background:#1E7A5A;border:none;color:#fff;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer">✅ Yetdim</button>
+  </div>`;
+}
+window.yetkazishYetdi=async function(){
+  if(!confirm('Mijozga yetkazib berdingizmi?')) return;
+  try{ await fetch('/api/yetkazish_yetdi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})}); }catch(e){}
+  if(yetkazishBox){ yetkazishBox.remove(); yetkazishBox=null; }
+  if(mijozMk&&map){ map.removeLayer(mijozMk); mijozMk=null; }
+  if(yolLine&&map){ map.removeLayer(yolLine); yolLine=null; }
+  toast('✅ Yetkazildi — rahmat!');
 }
 function updateOff(n){ offlineCount=n;
   if(n>0){ $('offbadge').style.display='block'; $('offn').textContent=n; }

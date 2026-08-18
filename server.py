@@ -270,7 +270,25 @@ def api_gps():
     n = db.gps_qosh(car["id"], b.get("points") or [])
     if db.car_seen(car["id"]) and OWNER_ID:
         _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
-    return jsonify({"ok": True, "saqlandi": n})
+    # haydovchiga biriktirilgan faol yetkazish bormi?
+    y = db.yetkazish_faol_car(car["id"])
+    manzil = None
+    if y:
+        manzil = {"lat": y["mlat"], "lon": y["mlon"], "izoh": y.get("izoh") or "", "token": y["token"]}
+    return jsonify({"ok": True, "saqlandi": n, "yetkazish": manzil})
+
+# haydovchi yetkazishni yakunladi (yetib bordim)
+@app.route("/api/yetkazish_yetdi", methods=["POST"])
+def api_yetkazish_yetdi():
+    b = request.json or {}
+    car = db.car_by_kuzat_token(b.get("token") or "")
+    if not car: return jsonify({"ok": False}), 404
+    y = db.yetkazish_faol_car(car["id"])
+    if y:
+        db.yetkazish_yakunla(y["token"])
+        if OWNER_ID:
+            _tg_msg(OWNER_ID, f"✅ <b>{car.get('driver') or car.get('name')}</b> — mijozga yetkazib berdi!")
+    return jsonify({"ok": True})
 
 # Traccar/OsmAnd fon GPS (id = gps_kod)
 @app.route("/osmand", methods=["GET","POST"])
@@ -347,6 +365,23 @@ def api_haydovchi_kuzat():
     cid=int(request.args.get("id",0))
     sana=request.args.get("sana") or str(db.today_tk())
     return jsonify(db.kunlik_xulosa(cid, sana))
+
+# harita.html uchun — kunlik nuqtalar + to'xtashlar (issiqlik, yo'l, to'xtash)
+@app.route("/api/gps_view")
+def api_gps_view():
+    # X-Token yoki kod bilan
+    tok = request.headers.get("X-Token") or request.args.get("code")
+    if tok != KIRISH_KODI:
+        return jsonify({"err":"kod"}), 401
+    cid=int(request.args.get("hid",0))
+    sana=request.args.get("sana") or str(db.today_tk())
+    x = db.kunlik_xulosa(cid, sana)
+    return jsonify({"nuqtalar":x["nuqtalar"], "toxtashlar":x["toxtashlar"], "km":x["km"]})
+
+# harita sahifasi (issiqlik, yo'l, to'xtashlar)
+@app.route("/harita")
+def harita_page():
+    return send_from_directory(".", "harita.html")
 
 # haydovchiga kuzat token/kod berish
 @app.route("/api/haydovchi_kod")
