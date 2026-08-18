@@ -4,7 +4,7 @@
 <link rel="apple-touch-icon" href="/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;color:#eaf2ee;overflow:hidden}
@@ -96,7 +96,7 @@ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;col
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ==== TOKEN ====
 let TOKEN=(function(){
@@ -168,8 +168,10 @@ async function onPos(p){
   const now=Date.now(); const acc=Math.round(p.coords.accuracy||0);
   const rang=acc<=30?'#39d98a':(acc<=100?'#f0c674':'#e06a6a');
   $('acc').innerHTML="<span style='color:"+rang+"'>● "+acc+" m</span>";
-  if(acc>150){ return; }
+  // juda noaniq (500m+) bo'lsagina tashlaymiz — aks holda qabul qilamiz
+  if(acc>500){ return; }
   const pt={lat:p.coords.latitude,lon:p.coords.longitude,vaqt:tkVaqt(),acc:acc};
+  // bir joyda turган bo'lsa (20m ичida) va 15 sekunddan kam — takror yozmaymiz
   if(lastP && (now-lastT)<15000 && dist(lastP,pt)<20){ return; }
   lastP=pt; lastT=now;
   await idbAdd('pts',pt);
@@ -178,6 +180,7 @@ async function onPos(p){
 function onErr(e){
   if(e.code===1){ showWarn("⚠️ Joylashuvga ruxsat berilmagan. Sozlamalardan yoqing."); }
   else if(e.code===2){ showWarn("⚠️ GPS signal yo'q. Ochiq joyga chiqing."); }
+  else if(e.code===3){ showWarn("⏳ GPS qidirilmoqda... ochiq joyga chiqing."); }
 }
 
 // ==== FLUSH — GPS nuqtalarni serverga yuborish (offline bo'lsa saqlaydi) ====
@@ -262,8 +265,11 @@ async function start(){
   await idbInit();
   tracking=true;
   $('s_holat').textContent="Yoniq"; $('s_holat').className="v on";
+  showWarn("⏳ GPS qidirilmoqda... biroz kuting");
+  // birinchi joyni tez olish
+  navigator.geolocation.getCurrentPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
-  watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
   if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); }
   ping(); flush();
   try{ if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen'); }catch(e){}
