@@ -412,14 +412,27 @@ def api_kuzat_kirish():
 def jonli_page():
     return send_from_directory(".", "jonli.html")
 
+@app.route("/jonli/<token>")
+def jonli_page_token(token):
+    return send_from_directory(".", "jonli.html")
+
 @app.route("/api/jonli")
 def api_jonli():
-    if not check_code(): return jsonify({"err":"kod"}), 401
-    cid=int(request.args.get("id",0))
+    # token (share) yoki id+code bilan
+    token = request.args.get("token")
+    if token and token != "jonli":
+        car = db.car_by_share(token)
+        if not car: return jsonify({"ok":False}), 404
+        cid = car["id"]
+    else:
+        if not check_code(): return jsonify({"err":"kod"}), 401
+        cid=int(request.args.get("id",0))
+        car=[c for c in db.all_cars() if c["id"]==cid]
+        car=car[0] if car else None
     g=db.gps_oxirgi(cid)
-    car=[c for c in db.all_cars() if c["id"]==cid]
-    return jsonify({"gps":g, "online":db.car_online(cid),
-                    "ism":(car[0]["driver"] if car else ""), "moshina":(car[0]["name"] if car else "")})
+    return jsonify({"ok":True, "gps":g, "nuqta":g, "online":db.car_online(cid),
+                    "ism":(car["driver"] if car else ""), "haydovchi":(car["driver"] if car else ""),
+                    "moshina":(car["name"] if car else "")})
 
 # ---- mijozga jonli ssilka (yol.html) ----
 @app.route("/yol/<token>")
