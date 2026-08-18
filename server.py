@@ -91,9 +91,11 @@ def api_add_log():
         return jsonify({"err": "kod"}), 401
     d = request.json
     who_id = int(d.get("who_id", 0))
-    # ega qo'shsa ok, boshqa wait
+    rol = d.get("rol", "")
+    # faqat HAQIQIY ega qo'shsa "ok" — haydovchi rejimida bo'lsa doim "wait"
     u = db.get_user(who_id)
-    st = "ok" if (u and u["role"] == "ega") else "wait"
+    is_ega = (rol == "ega") and (who_id == OWNER_ID or (u and u["role"] == "ega"))
+    st = "ok" if is_ega else "wait"
     katta = 1 if (d["t"] == "tamir" and int(d["amt"]) >= 800000) else 0
     chek_img = d.get("chek_img")
     chek_flag = 1 if chek_img else int(d.get("chek",0))
@@ -112,6 +114,22 @@ def api_log_state():
         return jsonify({"err": "kod"}), 401
     d = request.json
     db.set_log_state(int(d["id"]), d["st"], d.get("rej"))
+    return jsonify({"ok": True})
+
+@app.route("/api/log/delete", methods=["POST"])
+def api_log_delete():
+    if not check_code():
+        return jsonify({"err": "kod"}), 401
+    d = request.json
+    db.delete_log(int(d["id"]))
+    return jsonify({"ok": True})
+
+@app.route("/api/log/edit", methods=["POST"])
+def api_log_edit():
+    if not check_code():
+        return jsonify({"err": "kod"}), 401
+    d = request.json
+    db.edit_log(int(d["id"]), int(d["amt"]), d.get("note",""), d.get("pul"))
     return jsonify({"ok": True})
 
 @app.route("/api/salary", methods=["POST"])
@@ -218,6 +236,211 @@ def api_kurs():
     else:
         db.set_setting("kurs_manual", "")  # avtomatga qaytar
     return jsonify({"ok": True, "kurs": fetch_kurs()})
+
+# ==================== GPS ROUTES ====================
+import datetime as _dt
+def _osmand_vaqt(ts):
+    try:
+        if ts is None: raise ValueError
+        ts = str(ts)
+        if ts.isdigit():
+            d = _dt.datetime.fromtimestamp(int(ts), db.TZ)
+        else:
+            d = _dt.datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(db.TZ)
+        return d.strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return db.now_tk().strftime("%Y-%m-%dT%H:%M:%S")
+
+def _tg_msg(chat_id, matn):
+    try:
+        import bot as _b
+        if _b.BOT_TOKEN:
+            requests.post(f"https://api.telegram.org/bot{_b.BOT_TOKEN}/sendMessage",
+                          json={"chat_id":chat_id,"text":matn,"parse_mode":"HTML"}, timeout=10)
+    except Exception as e:
+        print("tg_msg err", e)
+
+# haydovchi GPS yuboradi (kuzat.html dan)
+@app.route("/api/gps", methods=["POST"])
+def api_gps():
+    b = request.json or {}
+    car = db.car_by_kuzat_token(b.get("token") or "")
+    if not car:
+        return jsonify({"ok": False, "xato": "token"}), 404
+    n = db.gps_qosh(car["id"], b.get("points") or [])
+    if db.car_seen(car["id"]) and OWNER_ID:
+        _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
+    return jsonify({"ok": True, "saqlandi": n})
+
+# Traccar/OsmAnd fon GPS (id = gps_kod)
+@app.route("/osmand", methods=["GET","POST"])
+def osmand():
+    q = dict(request.args)
+    if request.method == "POST":
+        try:
+            for k,v in request.form.items(): q.setdefault(k,v)
+        except Exception: pass
+    dev = (q.get("id") or q.get("deviceid") or "").strip()
+    car = db.car_by_gps_kod(dev) or db.car_by_kuzat_token(dev)
+    if not car:
+        return "unknown device", 400
+    lat=q.get("lat"); lon=q.get("lon")
+    if (lat is None or lon is None) and q.get("location"):
+        try: lat,lon = q["location"].split(",")[:2]
+        except Exception: pass
+    if lat is None or lon is None:
+        db.car_seen(car["id"]); return "ok", 200
+    try: lat=float(lat); lon=float(lon)
+    except Exception: return "ok", 200
+    try: acc=float(q.get("accuracy") or q.get("hdop") or 0)
+    except Exception: acc=0.0
+    vaqt=_osmand_vaqt(q.get("timestamp"))
+    db.gps_qosh(car["id"], [{"lat":lat,"lon":lon,"vaqt":vaqt,"acc":acc}])
+    if db.car_seen(car["id"]) and OWNER_ID:
+        _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
+    return "ok", 200
+
+# ping (heartbeat)
+@app.route("/api/ping", methods=["POST"])
+def api_ping():
+    b = request.json or {}
+    car = db.car_by_kuzat_token(b.get("token") or "")
+    if not car: return jsonify({"ok": False}), 404
+    if db.car_seen(car["id"]) and OWNER_ID:
+        _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
+    return jsonify({"ok": True})
+
+# haydovchi kuzat ilovasida pul kiritadi (token bilan) -> wait, egaga xabar
+@app.route("/api/gps_pul", methods=["POST"])
+def api_gps_pul():
+    b = request.json or {}
+    car = db.car_by_kuzat_token(b.get("token") or "")
+    if not car: return jsonify({"ok": False}), 404
+    katta = 1 if (b.get("t") == "tamir" and int(b.get("amt",0)) >= 800000) else 0
+    log_id = db.add_log(car["id"], b.get("t"), int(b["amt"]), b.get("note",""),
+                        b.get("pul","naqd"), car.get("driver") or car.get("name"), 0,
+                        st="wait", katta=katta)
+    try: bot.notify_owner_newlog(log_id)
+    except Exception as e: print("notify err", e)
+    return jsonify({"ok": True, "id": log_id})
+
+# ega uchun: hamma haydovchi joylashuvi
+@app.route("/api/haydovchilar")
+def api_haydovchilar():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    res=[]
+    for c in db.all_cars():
+        g = db.gps_oxirgi(c["id"])
+        online = db.car_online(c["id"])
+        res.append({
+            "id":c["id"], "ism":c["driver"], "moshina":c["name"], "raqam":c.get("raqam",""),
+            "online":online, "gps":g,
+            "yosh_daq": (round(db.gps_age_daqiqa(g["vaqt"]),1) if g else None),
+            "kod": db.car_gps_kod(c["id"]),
+        })
+    return jsonify({"haydovchilar":res})
+
+# bitta haydovchi kunlik yo'l (harita uchun)
+@app.route("/api/haydovchi_kuzat")
+def api_haydovchi_kuzat():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    cid=int(request.args.get("id",0))
+    sana=request.args.get("sana") or str(db.today_tk())
+    return jsonify(db.kunlik_xulosa(cid, sana))
+
+# haydovchiga kuzat token/kod berish
+@app.route("/api/haydovchi_kod")
+def api_haydovchi_kod():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    cid=int(request.args.get("id",0))
+    return jsonify({"token":db.car_gps_token(cid), "kod":db.car_gps_kod(cid), "share":db.car_share_token(cid)})
+
+# ---- kuzat.html (haydovchi GPS yuboradigan sahifa) ----
+@app.route("/kuzat")
+def kuzat_page():
+    return send_from_directory(".", "kuzat.html")
+
+@app.route("/kuzat/<token>")
+def kuzat_page_token(token):
+    return send_from_directory(".", "kuzat.html")
+
+@app.route("/api/kuzat_kirish", methods=["POST"])
+def api_kuzat_kirish():
+    b=request.json or {}
+    car=db.car_by_gps_kod(str(b.get("kod","")).strip())
+    if not car: return jsonify({"ok":False}), 404
+    return jsonify({"ok":True, "token":db.car_gps_token(car["id"]),
+                    "ism":car["driver"], "moshina":car["name"]})
+
+# ---- jonli kuzatuv (ega) ----
+@app.route("/jonli")
+def jonli_page():
+    return send_from_directory(".", "jonli.html")
+
+@app.route("/api/jonli")
+def api_jonli():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    cid=int(request.args.get("id",0))
+    g=db.gps_oxirgi(cid)
+    car=[c for c in db.all_cars() if c["id"]==cid]
+    return jsonify({"gps":g, "online":db.car_online(cid),
+                    "ism":(car[0]["driver"] if car else ""), "moshina":(car[0]["name"] if car else "")})
+
+# ---- mijozga jonli ssilka (yol.html) ----
+@app.route("/yol/<token>")
+def yol_page(token):
+    return send_from_directory(".", "yol.html")
+
+@app.route("/api/yol")
+def api_yol():
+    token=request.args.get("token","")
+    y=db.yetkazish_get(token)
+    if not y: return jsonify({"ok":False}), 404
+    g=db.gps_oxirgi(y["car_id"])
+    car=[c for c in db.all_cars() if c["id"]==y["car_id"]]
+    return jsonify({"ok":True, "holat":y["holat"],
+                    "mijoz":{"lat":y["mlat"],"lon":y["mlon"]}, "izoh":y.get("izoh"),
+                    "haydovchi":g, "ism":(car[0]["driver"] if car else "Haydovchi"),
+                    "online":db.car_online(y["car_id"])})
+
+# mijozga ssilka yaratish (ega)
+@app.route("/api/yetkazish", methods=["POST"])
+def api_yetkazish():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    b=request.json or {}
+    tok=db.yetkazish_qosh(int(b["car_id"]), float(b["lat"]), float(b["lon"]), b.get("izoh"))
+    base=os.environ.get("WEBAPP_URL","").rstrip("/")
+    return jsonify({"ok":True, "token":tok, "url":f"{base}/yol/{tok}"})
+
+@app.route("/api/yetkazish_yakun", methods=["POST"])
+def api_yetkazish_yakun():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    b=request.json or {}
+    db.yetkazish_yakunla(b.get("token",""))
+    return jsonify({"ok":True})
+
+# GPS iconlar (PWA)
+@app.route("/icon-180.png")
+def icon180(): return send_from_directory(".", "icon-180.png")
+@app.route("/icon-192.png")
+def icon192(): return send_from_directory(".", "icon-192__2_.png")
+@app.route("/icon-512.png")
+def icon512(): return send_from_directory(".", "icon-512__2_.png")
+
+# Service worker (fon GPS)
+@app.route("/sw-gps.js")
+def sw_gps():
+    return send_from_directory(".", "sw-gps.js", mimetype="application/javascript")
+
+# Haydovchi ilovasi manifest (PWA — bosh ekranga o'rnatish)
+@app.route("/manifest-hayd.json")
+def manifest_hayd():
+    return jsonify({
+        "name":"TEMIRCHI Haydovchi","short_name":"TEMIRCHI","start_url":"/kuzat",
+        "display":"standalone","background_color":"#0f1720","theme_color":"#0f1720",
+        "icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},
+                 {"src":"/icon-512.png","sizes":"512x512","type":"image/png"}]
+    })
 
 # ---------- bot ishga tushirish ----------
 bot.start_bot_thread()

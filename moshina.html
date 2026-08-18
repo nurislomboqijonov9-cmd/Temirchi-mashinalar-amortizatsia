@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TEMIRCHI — Moshina hisobot</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#17222e; --panel2:#1e2c3a; --line:#2a3b4d;
@@ -137,6 +139,34 @@
   .pul-btn{flex:1;padding:14px 6px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;transition:.12s}
   .pul-btn.pul-naqd.on{border-color:var(--green);background:rgba(63,191,127,.15);color:var(--green)}
   .pul-btn.pul-bonus.on{border-color:var(--yellow);background:rgba(224,182,74,.15);color:var(--yellow)}
+  /* GPS bo'lim */
+  .hcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .hrow{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .hico{width:44px;height:44px;border-radius:12px;background:var(--steel2);display:grid;place-items:center;font-size:22px;flex:none}
+  .hname2{font-size:16px;font-weight:600}
+  .hname2 small{font-size:12px;color:var(--muted);font-weight:400}
+  .on-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .hkm{text-align:right}.hkm .l{font-size:11px;color:var(--muted)}.hkm .v{font-size:15px;font-weight:700}
+  .hbtns{display:flex;gap:8px}
+  .hb{flex:1;padding:10px 6px;border-radius:10px;background:var(--panel2);text-align:center;font-size:13px;font-weight:600;cursor:pointer;border:none;color:var(--ink);transition:.12s}
+  .hb:hover{background:var(--line)}.hb.map{color:var(--steel)}.hb.ssilka{color:var(--gold)}
+  .hint-gps{background:#131c26;border:1px dashed var(--line);border-radius:12px;padding:12px;font-size:12px;color:var(--muted);text-align:center;margin-top:6px}
+  .gmodal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+  .gmodal.on{display:flex}
+  .gsheet{background:var(--panel);width:100%;max-width:900px;border-radius:16px;border:1px solid var(--steel2);overflow:hidden;max-height:92vh;display:flex;flex-direction:column}
+  .gsheet-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .gsheet-head .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:22px;background:none;border:none}
+  #gmap,#gmapS{height:420px;width:100%;background:#0b1a2e}
+  .gsheet-body{padding:14px 16px;overflow-y:auto}
+  .gstat-row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .gstat{flex:1;min-width:100px;background:var(--panel2);border-radius:10px;padding:10px}
+  .gstat .l{font-size:11px;color:var(--muted)}.gstat .v{font-size:18px;font-weight:700;margin-top:2px}
+  .gstop{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+  .gstop .t{color:var(--gold);font-weight:600;white-space:nowrap}
+  .ssilka-info{background:var(--panel2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--muted)}
+  .ssilka-result{margin-top:12px;padding:12px;background:#131c26;border:1px solid var(--green);border-radius:10px;display:none}
+  .ssilka-result.show{display:block}
+  .ssilka-url{color:var(--steel);font-size:12px;word-break:break-all;margin:6px 0}
 </style>
 </head>
 <body>
@@ -161,6 +191,7 @@
 <div class="wrap">
   <div class="tabs" id="tabs">
     <div class="tab on" data-v="dash">📊 Umumiy</div>
+    <div class="tab" data-v="gps">🗺 GPS Xarita</div>
     <div class="tab" data-v="cars">🚚 Moshinalar</div>
     <div class="tab" data-v="salary">💰 Oylik</div>
     <div class="tab" data-v="compare">⚖️ Solishtirish</div>
@@ -177,6 +208,13 @@
     <div class="card"><div class="chart" id="dashChart"></div></div>
     <h2><span class="bar"></span>Moshinalar</h2>
     <div class="grid" id="dashCars"></div>
+  </div>
+
+  <!-- GPS -->
+  <div id="view-gps" class="view hidden">
+    <h2><span class="bar"></span>Haydovchilar — jonli holat</h2>
+    <div id="gpsList"></div>
+    <div class="hint-gps">💡 <b>Xaritada</b> — haydovchi yo'li va to'xtashlari · <b>Mijozga ssilka</b> — mijoz manzilini belgilab, jonli kuzatuv ssilkasi (Yandex kabi)</div>
   </div>
 
   <!-- CARS -->
@@ -309,6 +347,47 @@
     <div class="sheet-btns">
       <button class="btn-cancel" id="salCancel">Bekor</button>
       <button class="btn-save" id="salSave">Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- GPS XARITA MODAL -->
+<div class="gmodal" id="gmapModal">
+  <div class="gsheet">
+    <div class="gsheet-head">
+      <div class="hico" style="width:32px;height:32px;font-size:16px">🚚</div>
+      <div><div class="hname2" id="gmapName" style="font-size:15px"></div><div style="font-size:11px;color:var(--muted)" id="gmapSub"></div></div>
+      <button class="x" onclick="gCloseModal('gmapModal')">✕</button>
+    </div>
+    <div id="gmap"></div>
+    <div class="gsheet-body">
+      <div class="gstat-row">
+        <div class="gstat"><div class="l">Bugun bosib o'tgan</div><div class="v" id="gstKm">—</div></div>
+        <div class="gstat"><div class="l">Ish vaqti</div><div class="v" id="gstVaqt">—</div></div>
+        <div class="gstat"><div class="l">To'xtashlar</div><div class="v" id="gstStop">—</div></div>
+      </div>
+      <div id="gstopList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GPS SSILKA MODAL -->
+<div class="gmodal" id="gssilkaModal">
+  <div class="gsheet">
+    <div class="gsheet-head">
+      <div class="hico" style="width:32px;height:32px;font-size:16px">📍</div>
+      <div><div class="hname2" style="font-size:15px">Mijozga ssilka</div><div style="font-size:11px;color:var(--muted)" id="gssilkaName"></div></div>
+      <button class="x" onclick="gCloseModal('gssilkaModal')">✕</button>
+    </div>
+    <div id="gmapS"></div>
+    <div class="gsheet-body">
+      <div class="ssilka-info">📍 Xaritani bosib <b>mijoz manzilini</b> belgilang. Keyin ssilka chiqadi — mijozga yuborasiz, u haydovchini jonli ko'radi.</div>
+      <button class="btn-save" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--gold);color:#2e1c04;font-weight:700;cursor:pointer" id="gssilkaGen">🔗 Ssilka yaratish</button>
+      <div class="ssilka-result" id="gssilkaResult">
+        <div style="color:var(--green);font-weight:600;font-size:14px">✅ Ssilka tayyor!</div>
+        <div class="ssilka-url" id="gssilkaUrl"></div>
+        <button style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--steel2);color:#fff;font-weight:700;cursor:pointer" onclick="gCopySsilka()">📋 Nusxa olish</button>
+      </div>
     </div>
   </div>
 </div>
@@ -664,7 +743,11 @@ function logRow(l){
   } else { amtColor='var(--red)'; amtSign='−'; }
   const actions=(ROLE==="ega"&&l.st==="wait")?`<div class="row-act">
     <button class="btn-sm btn-ok" onclick="setState(${l.id},'ok')">✅ Tasdiqlash</button>
-    <button class="btn-sm btn-no" onclick="rejectLog(${l.id})">❌ Rad etish</button></div>`:'';
+    <button class="btn-sm btn-no" onclick="rejectLog(${l.id})">❌ Rad etish</button></div>`
+    :(ROLE==="ega"&&(l.st==="ok"||l.st==="no"))?`<div class="row-act">
+    <button class="btn-sm" style="background:var(--panel2);color:var(--steel)" onclick="editLog(${l.id})">✏️ O'zgartirish</button>
+    ${l.st==="no"?`<button class="btn-sm btn-ok" onclick="setState(${l.id},'ok')">✅ Tasdiqlash</button>`:`<button class="btn-sm" style="background:var(--panel2);color:var(--yellow)" onclick="setState(${l.id},'wait')">↩️ Otmen</button>`}
+    <button class="btn-sm btn-no" onclick="deleteLog(${l.id})">🗑 O'chirish</button></div>`:'';
   return `<div class="exp" style="flex-wrap:wrap">
     <div class="ico">${ty.ico}</div>
     <div class="info">
@@ -888,6 +971,21 @@ function renderPending(){
 // ---------- ACTIONS ----------
 window.setState=async function(id,st){ await apiPost('/api/log/state',{id,st}); await loadData(); refreshAll(); }
 window.rejectLog=async function(id){ const r=prompt("Rad etish sababi:",""); await apiPost('/api/log/state',{id,st:'no',rej:r||''}); await loadData(); refreshAll(); }
+window.deleteLog=async function(id){
+  if(!confirm("Bu yozuv butunlay o'chirilsinmi? (Qaytarib bo'lmaydi)")) return;
+  await apiPost('/api/log/delete',{id}); await loadData(); refreshAll(); toast('🗑 O\'chirildi');
+}
+window.editLog=async function(id){
+  const l=LOG.find(x=>x.id===id); if(!l) return;
+  const yangi=prompt("Yangi summa (so'm):", l.amt);
+  if(yangi===null) return;
+  const amt=parseInt((''+yangi).replace(/\D/g,'')); if(isNaN(amt)||amt<=0){ alert("Noto'g'ri summa"); return; }
+  const note=prompt("Izoh:", l.note||'');
+  if(note===null) return;
+  const body={id,amt,note};
+  if(TYPE[l.t]&&TYPE[l.t].in) body.pul=l.pul; // yolkira bo'lsa pul turi saqlanadi
+  await apiPost('/api/log/edit',body); await loadData(); refreshAll(); toast('✏️ O\'zgartirildi');
+}
 
 // ---------- MODAL (expense) ----------
 let modalType=null, mPul="naqd", mQuick=null;
@@ -925,7 +1023,7 @@ async function saveModal(){
   const car=parseInt(document.getElementById('mCar').value);
   const note=document.getElementById('mNote').value.trim();
   const who=ROLE==="haydovchi"?CARS.find(c=>c.id===car).driver:"Ega";
-  const body={car_id:car,t,amt,note,who,who_id:MY_ID,chek:chekAttached?1:0};
+  const body={car_id:car,t,amt,note,who,who_id:MY_ID,rol:ROLE,chek:chekAttached?1:0};
   if(t==="yolkira")body.pul=mPul;
   document.getElementById('modal').classList.remove('on');
   // chek rasm bo'lsa avval yuklaymiz
@@ -979,10 +1077,123 @@ window.ochChek = function(fn){
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200);}
 
 // ---------- VIEW ----------
+// ============ GPS ============
+let GPS_DATA = [];
+async function loadGps(){
+  try{
+    const r = await fetch('/api/haydovchilar?code='+encodeURIComponent(CODE()));
+    if(!r.ok) return;
+    const d = await r.json();
+    GPS_DATA = d.haydovchilar||[];
+  }catch(e){ console.error('gps load',e); }
+}
+function renderGps(){
+  const el = document.getElementById('gpsList');
+  if(!el) return;
+  if(!GPS_DATA.length){ el.innerHTML='<div class="empty">Haydovchilar yo\'q yoki GPS ma\'lumot kelmadi</div>'; return; }
+  el.innerHTML = GPS_DATA.map(h=>{
+    const online = h.online;
+    const yosh = h.yosh_daq;
+    const st = online
+      ? `<span class="on-dot" style="background:var(--green)"></span><span style="color:var(--green)">Onlayn · yo'lda</span>`
+      : `<span class="on-dot" style="background:var(--red)"></span><span style="color:var(--red)">Oflayn${yosh!=null?' · '+Math.round(yosh)+' daq oldin':''}</span>`;
+    return `<div class="hcard">
+      <div class="hrow">
+        <div class="hico">🚚</div>
+        <div style="flex:1">
+          <div class="hname2">${h.ism||h.moshina} <small>· ${h.moshina} · ${h.raqam||''}</small></div>
+          <div style="font-size:12px;margin-top:2px">${st}</div>
+        </div>
+      </div>
+      <div class="hbtns">
+        <button class="hb map" onclick="gShowMap(${h.id})">📍 Xaritada</button>
+        <button class="hb ssilka" onclick="gShowSsilka(${h.id})">📤 Mijozga ssilka</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let gmap, gmapS, gMijoz;
+async function gShowMap(cid){
+  const h = GPS_DATA.find(x=>x.id===cid); if(!h) return;
+  document.getElementById('gmapName').textContent=(h.ism||h.moshina)+' · '+h.moshina;
+  document.getElementById('gmapSub').textContent=h.raqam||'';
+  document.getElementById('gmapModal').classList.add('on');
+  // kunlik yo'l serverdan
+  let xul={};
+  try{ const r=await fetch('/api/haydovchi_kuzat?code='+encodeURIComponent(CODE())+'&id='+cid); xul=await r.json(); }catch(e){}
+  document.getElementById('gstKm').textContent=(xul.km!=null?xul.km+' km':'—');
+  document.getElementById('gstVaqt').textContent=xul.ish_vaqti||'—';
+  document.getElementById('gstStop').textContent=(xul.toxtashlar?xul.toxtashlar.length:0)+' ta';
+  document.getElementById('gstopList').innerHTML = (xul.toxtashlar&&xul.toxtashlar.length)
+    ? '<h2 style="font-size:14px;margin:12px 0 6px"><span class="bar"></span>To\'xtashlar</h2>'+
+      xul.toxtashlar.map(s=>`<div class="gstop"><span class="t">${(s.boshlanish||'').slice(11,16)}</span><span style="flex:1">${s.daqiqa} daqiqa turdi</span></div>`).join('')
+    : '<div class="empty" style="padding:20px">Bugun to\'xtash yo\'q</div>';
+  setTimeout(()=>{
+    if(typeof L==='undefined'){ document.getElementById('gmap').innerHTML='<div style="padding:40px;text-align:center;color:#8ba0b3">Xarita yuklanmadi (internet kerak)</div>'; return; }
+    if(gmap) gmap.remove();
+    const pts=(xul.nuqtalar||[]).map(p=>[p.lat,p.lon]);
+    const center = pts.length?pts[pts.length-1]:[41.31,69.24];
+    gmap=L.map('gmap',{zoomControl:true,attributionControl:false}).setView(center,13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(gmap);
+    if(pts.length){
+      L.polyline(pts,{color:'#3d6d94',weight:5,opacity:.8}).addTo(gmap);
+      L.marker(pts[pts.length-1]).addTo(gmap).bindPopup('🚚 '+(h.ism||h.moshina)+' (hozir)');
+      (xul.toxtashlar||[]).forEach(s=>L.circleMarker([s.lat,s.lon],{radius:7,color:'#e0a14a',fillColor:'#e0a14a',fillOpacity:.8}).addTo(gmap).bindPopup('🕐 '+s.daqiqa+' daqiqa'));
+      try{ gmap.fitBounds(pts,{padding:[40,40]}); }catch(e){}
+    } else {
+      L.popup().setLatLng(center).setContent('Bugun GPS ma\'lumot yo\'q').openOn(gmap);
+    }
+  },200);
+}
+
+async function gShowSsilka(cid){
+  const h = GPS_DATA.find(x=>x.id===cid); if(!h) return;
+  gSsilkaCar=cid;
+  document.getElementById('gssilkaName').textContent=(h.ism||h.moshina)+' · '+h.moshina;
+  document.getElementById('gssilkaResult').classList.remove('show');
+  gMijoz=null;
+  document.getElementById('gssilkaModal').classList.add('on');
+  // haydovchi hozirgi joyi
+  let g=null;
+  try{ const r=await fetch('/api/jonli?code='+encodeURIComponent(CODE())+'&id='+cid); const d=await r.json(); g=d.gps; }catch(e){}
+  setTimeout(()=>{
+    if(typeof L==='undefined'){ document.getElementById('gmapS').innerHTML='<div style="padding:40px;text-align:center;color:#8ba0b3">Xarita yuklanmadi (internet kerak)</div>'; return; }
+    if(gmapS) gmapS.remove();
+    const center = g?[g.lat,g.lon]:[41.31,69.24];
+    gmapS=L.map('gmapS',{zoomControl:true,attributionControl:false}).setView(center,13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(gmapS);
+    if(g) L.marker(center).addTo(gmapS).bindPopup('🚚 '+(h.ism||h.moshina));
+    gmapS.on('click',e=>{
+      if(gMijoz) gmapS.removeLayer(gMijoz);
+      gMijoz=L.circleMarker(e.latlng,{radius:9,color:'#e05a5a',fillColor:'#e05a5a',fillOpacity:.9}).addTo(gmapS).bindPopup('📍 Mijoz manzili').openPopup();
+    });
+  },200);
+}
+let gSsilkaCar=null;
+document.getElementById('gssilkaGen').addEventListener('click',async()=>{
+  if(!gMijoz){ toast('📍 Avval xaritada mijoz manzilini belgilang'); return; }
+  const ll=gMijoz.getLatLng();
+  const res=await apiPost('/api/yetkazish',{car_id:gSsilkaCar,lat:ll.lat,lon:ll.lng,izoh:''});
+  if(res&&res.url){
+    document.getElementById('gssilkaUrl').textContent=res.url;
+    document.getElementById('gssilkaResult').classList.add('show');
+    toast('✅ Ssilka yaratildi');
+  }
+});
+window.gCopySsilka=function(){
+  const u=document.getElementById('gssilkaUrl').textContent;
+  navigator.clipboard.writeText(u).then(()=>toast('📋 Nusxa olindi')).catch(()=>toast(u));
+}
+window.gCloseModal=function(id){ document.getElementById(id).classList.remove('on'); }
+window.gShowMap=gShowMap; window.gShowSsilka=gShowSsilka;
+document.querySelectorAll('.gmodal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
+
 function switchView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.add('hidden'));
   document.getElementById('view-'+v).classList.remove('hidden');
   if(v==='dash')renderDash();
+  if(v==='gps'){ loadGps().then(renderGps); }
   if(v==='cars')renderCars();
   if(v==='salary')renderSalary();
   if(v==='compare')renderCompare();

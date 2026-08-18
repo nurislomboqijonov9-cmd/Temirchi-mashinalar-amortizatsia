@@ -192,9 +192,9 @@ def daily_report():
     send(OWNER_ID, "\n".join(lines))
 
 def report_scheduler():
-    """Har kuni 19:30 hisobot; oy oxirida eskirish qo'shadi (Toshkent)."""
-    import calendar
+    """Har kuni 19:30 hisobot; har daqiqa GPS offline tekshiruvi (Toshkent)."""
     sent_today = None
+    last_off_check = 0
     while True:
         try:
             tz = 5*3600
@@ -205,11 +205,29 @@ def report_scheduler():
             if lt.tm_hour == 19 and lt.tm_min == 30 and sent_today != key:
                 daily_report()
                 sent_today = key
-            # eskirish endi ishlagan vaqtiga qarab ilovada avtomat hisoblanadi
-            # (oy oxirida yozuv qo'shish kerak emas)
+            # GPS offline tekshiruvi — har 60 sekundda
+            if time.time() - last_off_check >= 60:
+                last_off_check = time.time()
+                check_gps_offline()
         except Exception as e:
             print("report err", e)
         time.sleep(30)
+
+def check_gps_offline():
+    """5 daqiqa signal bermagan (lekin ilgari faol bo'lgan) haydovchi -> botga bir marta xabar."""
+    try:
+        for c in db.all_cars():
+            if not c.get("last_seen"):
+                continue  # hech qachon ulanmagan — xabar bermaymiz
+            online = db.car_online(c["id"], daqiqa=5)
+            if not online and not c.get("offline_xabar"):
+                # signal uzildi — bir marta xabar
+                db.mark_offline_xabar(c["id"])
+                haydovchi = c.get("driver") or c.get("name")
+                send(OWNER_ID, f"🔴 <b>{haydovchi}</b> ({c['name']}) — GPS signal uzildi!\n"
+                               f"5 daqiqadan beri joylashuv kelmayapti. Telefon o'chgan yoki ilova yopilgan bo'lishi mumkin.")
+    except Exception as e:
+        print("gps offline check err", e)
 
 # ---------- polling ----------
 def run_polling():

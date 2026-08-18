@@ -1,0 +1,283 @@
+<!doctype html><html lang="uz"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1720"><title>TEMIRCHI — Haydovchi</title>
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;color:#eaf2ee;overflow:hidden}
+#map{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1;background:#223}
+.top{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:linear-gradient(#0f1720ee,#0f1720aa,transparent)}
+.logo{width:36px;height:36px;border-radius:9px;background:#16294A;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.tt{font-weight:800;font-size:15px;letter-spacing:.03em}.tt b{color:#39d98a}
+.acc{margin-left:auto;font-size:12px;font-weight:700;padding:5px 10px;border-radius:20px;background:#16232e;border:1px solid #24333d}
+.card{position:fixed;left:12px;right:12px;bottom:14px;z-index:10;background:#16232eef;backdrop-filter:blur(8px);
+  border:1px solid #24333d;border-radius:16px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+.stat{display:flex;justify-content:space-around;text-align:center;margin-bottom:12px}
+.stat .v{font-size:19px;font-weight:800}.stat .l{font-size:11px;color:#8aa0a8;margin-top:2px}
+.stat .v.on{color:#39d98a}
+.pulbtn{width:100%;padding:14px;border:none;border-radius:13px;font-size:16px;font-weight:800;cursor:pointer;color:#fff;background:#1E7A5A}
+.warn{position:fixed;top:60px;left:12px;right:12px;z-index:11;background:#3a2a12;border:1px solid #a06a1e;color:#f0c674;
+  padding:11px 13px;border-radius:12px;font-size:12.5px;line-height:1.5;display:none}
+.pin{width:18px;height:18px;border-radius:50%;background:#39d98a;border:3px solid #fff;box-shadow:0 0 0 rgba(57,217,138,.6);animation:pl 1.6s infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(57,217,138,.6)}70%{box-shadow:0 0 0 18px rgba(57,217,138,0)}100%{box-shadow:0 0 0 0 rgba(57,217,138,0)}}
+.offbadge{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:12;background:#3a2412;border:1px solid #a0621e;color:#f0b464;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;display:none}
+/* Pul modal */
+.pmodal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:none;align-items:flex-end;justify-content:center}
+.pmodal.on{display:flex}
+.psheet{background:#16232e;width:100%;max-width:520px;border-radius:20px 20px 0 0;border:1px solid #24333d;padding:18px 16px 26px;max-height:88vh;overflow-y:auto}
+.psheet h3{font-size:17px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.psheet .x{margin-left:auto;background:none;border:none;color:#8aa0a8;font-size:22px;cursor:pointer}
+.ptypes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.pt{padding:12px 6px;border-radius:12px;background:#0f1a22;border:1px solid #24333d;text-align:center;font-size:13px;cursor:pointer;color:#eaf2ee}
+.pt.on{background:#1E7A5A;border-color:#39d98a}
+.pt .i{font-size:22px;display:block;margin-bottom:4px}
+.qtez{display:flex;gap:8px;margin-bottom:12px}
+.qtez button{flex:1;padding:12px;border-radius:10px;background:#22323d;border:1px solid #33454f;color:#eaf2ee;font-size:14px;font-weight:700;cursor:pointer}
+.pf{width:100%;background:#0f1a22;border:1px solid #2a3b47;color:#eaf2ee;border-radius:11px;padding:13px;font-size:16px;margin-bottom:10px}
+.psave{width:100%;padding:15px;border:none;border-radius:13px;background:#1E7A5A;color:#fff;font-size:16px;font-weight:800;cursor:pointer}
+.pnaqd{display:flex;gap:8px;margin-bottom:12px}
+.pnaqd button{flex:1;padding:11px;border-radius:10px;border:1px solid #33454f;background:#0f1a22;color:#eaf2ee;font-size:13px;font-weight:700;cursor:pointer}
+.pnaqd button.on{background:#0f2a20;border-color:#39d98a;color:#39d98a}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1E7A5A;color:#fff;padding:12px 20px;border-radius:24px;z-index:200;font-size:14px}
+</style></head>
+<body>
+<!-- KIRISH (kod) -->
+<div id="kirish" style="position:fixed;inset:0;z-index:50;background:#0f1720;display:none;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center">
+  <div style="width:72px;height:72px;border-radius:18px;background:#16294A;display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:16px">🚚</div>
+  <div style="font-size:22px;font-weight:800;letter-spacing:.04em">TEMIR<span style="color:#39d98a">CHI</span></div>
+  <div style="color:#8aa0a8;font-size:13px;margin:6px 0 22px">Haydovchi ilovasi</div>
+  <div style="color:#cfe;font-size:14px;margin-bottom:10px">Rahbar bergan <b>6 xonali kod</b>ni kiriting:</div>
+  <input id="kod" inputmode="numeric" maxlength="6" placeholder="______"
+    style="width:200px;text-align:center;letter-spacing:10px;font-size:26px;font-weight:800;padding:12px;border-radius:12px;border:1px solid #2a3b47;background:#0f1a22;color:#eaf2ee;margin-bottom:16px">
+  <button id="kirBtn" style="width:220px;padding:14px;border:none;border-radius:12px;background:#1E7A5A;color:#fff;font-size:16px;font-weight:800;cursor:pointer">Kirish</button>
+  <div id="kodXato" style="color:#e06a6a;font-size:13px;margin-top:12px;min-height:18px"></div>
+</div>
+
+<div id="map"></div>
+<div class="top">
+  <div class="logo">🚚</div>
+  <div><div class="tt">TEMIR<b>CHI</b></div><div style="font-size:11px;color:#8aa0a8" id="nm">Kuzatuv</div></div>
+  <div class="acc" id="acc">—</div>
+</div>
+<div class="offbadge" id="offbadge">📴 Internetsiz — saqlanmoqda (<span id="offn">0</span>)</div>
+<div class="warn" id="warn"></div>
+
+<div class="card">
+  <div class="stat">
+    <div><div class="v on" id="s_holat">Yoniq</div><div class="l">GPS</div></div>
+    <div><div class="v" id="s_km">0.0</div><div class="l">km (bugun)</div></div>
+    <div><div class="v" id="s_vaqt">—</div><div class="l">So'nggi</div></div>
+  </div>
+  <button class="pulbtn" onclick="openPul()">➕ Pul / xarajat kiritish</button>
+</div>
+
+<!-- PUL MODAL -->
+<div class="pmodal" id="pmodal">
+  <div class="psheet">
+    <h3>➕ Yozuv qo'shish <button class="x" onclick="closePul()">✕</button></h3>
+    <div class="ptypes" id="ptypes"></div>
+    <div id="naqdBox" class="pnaqd">
+      <button class="on" data-pul="naqd" onclick="setPul('naqd')">🟢 Naqd keldi</button>
+      <button data-pul="bonus" onclick="setPul('bonus')">🟡 Ish qildi (pul kelmadi)</button>
+    </div>
+    <div class="qtez">
+      <button onclick="setAmt(100000)">100k</button>
+      <button onclick="setAmt(150000)">150k</button>
+      <button onclick="setAmt(200000)">200k</button>
+    </div>
+    <input class="pf" id="pAmt" inputmode="numeric" placeholder="Summa (so'm)">
+    <input class="pf" id="pNote" placeholder="Izoh (ixtiyoriy)">
+    <button class="psave" onclick="savePul()">✅ Yuborish</button>
+    <div style="text-align:center;color:#8aa0a8;font-size:12px;margin-top:10px">Rahbar tasdiqlaydi. Internetsiz bo'lsa — keyin yuboriladi.</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ==== TOKEN ====
+let TOKEN=(function(){
+  const parts=location.pathname.split('/').filter(Boolean);
+  const last=parts[parts.length-1];
+  if(last && last!=='kuzat' && last!=='kuzat.html'){ try{localStorage.setItem('hayd_token',last);}catch(e){} return last; }
+  try{ return localStorage.getItem('hayd_token')||''; }catch(e){ return ''; }
+})();
+const $=id=>document.getElementById(id);
+let watchId=null, wake=null, lastP=null, lastT=0, tracking=false;
+let map=null, marker=null, acirc=null, trail=null, tpts=[], kmSum=0, prevLL=null, birinchi=true;
+
+// ==== OFFLINE saqlash (IndexedDB - ko'p sig'adi, ishonchli) ====
+let idb=null;
+function idbInit(){
+  return new Promise(res=>{
+    try{
+      const rq=indexedDB.open('temirchi_gps',1);
+      rq.onupgradeneeded=e=>{ const db=e.target.result;
+        if(!db.objectStoreNames.contains('pts')) db.createObjectStore('pts',{keyPath:'k',autoIncrement:true});
+        if(!db.objectStoreNames.contains('pul')) db.createObjectStore('pul',{keyPath:'k',autoIncrement:true});
+      };
+      rq.onsuccess=e=>{ idb=e.target.result; res(true); };
+      rq.onerror=()=>res(false);
+    }catch(e){ res(false); }
+  });
+}
+function idbAdd(store,val){ return new Promise(res=>{ if(!idb)return res(false);
+  try{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).add(val); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
+function idbAll(store){ return new Promise(res=>{ if(!idb)return res([]);
+  try{ const tx=idb.transaction(store,'readonly'); const rq=tx.objectStore(store).getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>res([]);}catch(e){res([]);} }); }
+function idbClear(store,keys){ return new Promise(res=>{ if(!idb)return res(false);
+  try{ const tx=idb.transaction(store,'readwrite'); const os=tx.objectStore(store); keys.forEach(k=>os.delete(k)); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);}catch(e){res(false);} }); }
+
+function dist(a,b){ if(!a||!b)return 1e9; const R=6371000,r=x=>x*Math.PI/180;
+  const d1=r(b.lat-a.lat),d2=r(b.lon-a.lon),h=Math.sin(d1/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(d2/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h))); }
+function tkVaqt(){ const d=new Date(); const tk=new Date(d.getTime()+(d.getTimezoneOffset()+300)*60000);
+  const p=n=>String(n).padStart(2,'0');
+  return tk.getFullYear()+'-'+p(tk.getMonth()+1)+'-'+p(tk.getDate())+'T'+p(tk.getHours())+':'+p(tk.getMinutes())+':'+p(tk.getSeconds()); }
+
+function initMap(){
+  try{
+    if(typeof L==='undefined') return;
+    map=L.map('map',{zoomControl:false,attributionControl:false}).setView([41.311,69.24],15);
+    const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    const sput=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+    L.control.layers({"Ko'cha":kocha,"Sputnik":sput},null,{position:'topright'}).addTo(map);
+    trail=L.polyline([],{color:'#39d98a',weight:5,opacity:.85}).addTo(map);
+  }catch(e){ map=null; }
+}
+function chiz(pt){
+  $('s_vaqt').textContent=pt.vaqt.slice(11,16);
+  const ll=[pt.lat,pt.lon];
+  if(prevLL) kmSum+=dist({lat:prevLL[0],lon:prevLL[1]},pt)/1000;
+  prevLL=ll; tpts.push(ll);
+  $('s_km').textContent=kmSum.toFixed(1);
+  if(!map || typeof L==='undefined') return;
+  try{
+    if(!marker){
+      marker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="pin"></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map);
+      acirc=L.circle(ll,{radius:pt.acc||20,color:'#39d98a',weight:1,fillColor:'#39d98a',fillOpacity:.1}).addTo(map);
+    }else{ marker.setLatLng(ll); acirc.setLatLng(ll); acirc.setRadius(pt.acc||20); }
+    if(trail) trail.setLatLngs(tpts);
+    if(birinchi){ map.setView(ll,16); birinchi=false; } else map.panTo(ll,{animate:true});
+  }catch(e){}
+}
+async function onPos(p){
+  const now=Date.now(); const acc=Math.round(p.coords.accuracy||0);
+  const rang=acc<=30?'#39d98a':(acc<=100?'#f0c674':'#e06a6a');
+  $('acc').innerHTML="<span style='color:"+rang+"'>● "+acc+" m</span>";
+  if(acc>150){ return; }
+  const pt={lat:p.coords.latitude,lon:p.coords.longitude,vaqt:tkVaqt(),acc:acc};
+  if(lastP && (now-lastT)<15000 && dist(lastP,pt)<20){ return; }
+  lastP=pt; lastT=now;
+  await idbAdd('pts',pt);
+  chiz(pt); hideWarn(); flush();
+}
+function onErr(e){
+  if(e.code===1){ showWarn("⚠️ Joylashuvga ruxsat berilmagan. Sozlamalardan yoqing."); }
+  else if(e.code===2){ showWarn("⚠️ GPS signal yo'q. Ochiq joyga chiqing."); }
+}
+
+// ==== FLUSH — GPS nuqtalarni serverga yuborish (offline bo'lsa saqlaydi) ====
+let offlineCount=0;
+async function flush(){
+  const items=await idbAll('pts'); if(!items.length){ updateOff(0); return; }
+  const points=items.map(x=>({lat:x.lat,lon:x.lon,vaqt:x.vaqt,acc:x.acc}));
+  const keys=items.map(x=>x.k);
+  try{
+    const r=await fetch('/api/gps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,points})});
+    if(r.ok){ await idbClear('pts',keys); updateOff(0); flushPul(); }
+    else updateOff(items.length);
+  }catch(e){ updateOff(items.length); }
+}
+function updateOff(n){ offlineCount=n;
+  if(n>0){ $('offbadge').style.display='block'; $('offn').textContent=n; }
+  else $('offbadge').style.display='none'; }
+
+async function ping(){ if(!tracking) return; try{ await fetch('/api/ping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})}); }catch(e){} }
+
+function showWarn(t){ $('warn').innerHTML=t; $('warn').style.display='block'; }
+function hideWarn(){ $('warn').style.display='none'; }
+
+// ==== START (doimiy kuzatuv) ====
+async function start(){
+  if(!navigator.geolocation){ showWarn("Bu qurilmada GPS yo'q."); return; }
+  await idbInit();
+  tracking=true;
+  $('s_holat').textContent="Yoniq"; $('s_holat').className="v on";
+  if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+  watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); }
+  ping(); flush();
+  try{ if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen'); }catch(e){}
+  // Service worker (fon uchun)
+  try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-gps.js').catch(()=>{}); }catch(e){}
+}
+
+// wakeLock qayta olish (ekran o'chib yonganda)
+document.addEventListener('visibilitychange',async()=>{
+  if(tracking&&document.visibilityState==='visible'){
+    try{ if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen'); }catch(e){}
+    flush();
+  }
+});
+window.addEventListener('online',()=>{ flush(); });
+window.addEventListener('focus',flush);
+
+// ==== PUL kiritish ====
+const PT={
+  yolkira:{i:'💵',n:"Yo'lkira",in:true}, gaz:{i:'⛽',n:'Gaz'}, ovqat:{i:'🍽',n:'Ovqat'},
+  tamir:{i:'🔧',n:"Ta'mir"}, yuvish:{i:'🚿',n:'Yuvish'}, boshqa:{i:'📦',n:'Boshqa'}
+};
+let curType='yolkira', curPul='naqd';
+function renderTypes(){
+  $('ptypes').innerHTML=Object.keys(PT).map(k=>
+    `<div class="pt${k===curType?' on':''}" data-t="${k}" onclick="setType('${k}')"><span class="i">${PT[k].i}</span>${PT[k].n}</div>`).join('');
+  $('naqdBox').style.display = PT[curType].in ? 'flex' : 'none';
+}
+window.setType=function(k){ curType=k; renderTypes(); }
+window.setPul=function(p){ curPul=p; document.querySelectorAll('#naqdBox button').forEach(b=>b.classList.toggle('on',b.dataset.pul===p)); }
+window.setAmt=function(v){ $('pAmt').value=v; }
+window.openPul=function(){ curType='yolkira'; curPul='naqd'; $('pAmt').value=''; $('pNote').value=''; renderTypes(); setPul('naqd'); $('pmodal').classList.add('on'); }
+window.closePul=function(){ $('pmodal').classList.remove('on'); }
+async function savePul(){
+  const amt=parseInt(($('pAmt').value||'').replace(/\D/g,''));
+  if(!amt||amt<=0){ toast('Summa kiriting'); return; }
+  const rec={t:curType,amt,note:($('pNote').value||'').trim(),pul:(PT[curType].in?curPul:null),vaqt:tkVaqt()};
+  await idbAdd('pul',rec);
+  closePul(); toast('✅ Saqlandi — yuborilmoqda');
+  flushPul();
+}
+async function flushPul(){
+  const items=await idbAll('pul'); if(!items.length) return;
+  for(const it of items){
+    try{
+      const r=await fetch('/api/gps_pul',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:TOKEN,t:it.t,amt:it.amt,note:it.note,pul:it.pul})});
+      if(r.ok){ await idbClear('pul',[it.k]); }
+    }catch(e){ break; } // internet yo'q — keyin
+  }
+}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200);}
+
+// ==== KOD bilan kirish ====
+async function kodKirish(){
+  const k=($('kod').value||'').trim();
+  if(k.length<6){ $('kodXato').textContent="6 xonali kodni kiriting"; return; }
+  try{
+    const r=await fetch('/api/kuzat_kirish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kod:k})});
+    const d=await r.json();
+    if(!d.ok){ $('kodXato').textContent=d.xato||"Kod noto'g'ri"; return; }
+    try{ localStorage.setItem('hayd_token',d.token); }catch(e){}
+    location.href='/kuzat';
+  }catch(e){ $('kodXato').textContent="Ulanish yo'q"; }
+}
+$('kirBtn').onclick=kodKirish;
+$('kod').addEventListener('keydown',e=>{ if(e.key==='Enter') kodKirish(); });
+
+initMap();
+if(!TOKEN){ $('kirish').style.display='flex'; }
+else { start(); }
+</script></body></html>
