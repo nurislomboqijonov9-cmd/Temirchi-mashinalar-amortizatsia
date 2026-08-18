@@ -133,6 +133,19 @@ def handle_callback(cb):
     # log tasdiqlash: logok_5 / logno_5
     if data.startswith("logok_"):
         log_id = int(data.split("_")[1])
+        l = db.get_log(log_id)
+        if not l:
+            answer_cb(cb_id, "Yozuv o'chirilgan")
+            _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+                 message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+            return
+        if l["st"] != "wait":
+            # allaqachon hal qilingan (web yoki bot orqali)
+            holat = "tasdiqlangan ✅" if l["st"]=="ok" else "rad etilgan ❌"
+            answer_cb(cb_id, f"Allaqachon {holat}")
+            _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+                 message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+            return
         db.set_log_state(log_id, "ok")
         answer_cb(cb_id, "Tasdiqlandi")
         _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
@@ -141,6 +154,18 @@ def handle_callback(cb):
         return
     if data.startswith("logno_"):
         log_id = int(data.split("_")[1])
+        l = db.get_log(log_id)
+        if not l:
+            answer_cb(cb_id, "Yozuv o'chirilgan")
+            _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+                 message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+            return
+        if l["st"] != "wait":
+            holat = "tasdiqlangan ✅" if l["st"]=="ok" else "rad etilgan ❌"
+            answer_cb(cb_id, f"Allaqachon {holat}")
+            _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+                 message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+            return
         db.set_log_state(log_id, "no", "Rad etildi")
         answer_cb(cb_id, "Rad etildi")
         _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],

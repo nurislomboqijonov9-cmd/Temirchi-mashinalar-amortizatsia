@@ -381,12 +381,14 @@
     </div>
     <div id="gmapS"></div>
     <div class="gsheet-body">
-      <div class="ssilka-info">📍 Xaritani bosib <b>mijoz manzilini</b> belgilang. Keyin ssilka chiqadi — mijozga yuborasiz, u haydovchini jonli ko'radi.</div>
-      <button class="btn-save" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--gold);color:#2e1c04;font-weight:700;cursor:pointer" id="gssilkaGen">🔗 Ssilka yaratish</button>
+      <div class="ssilka-info">📍 Xaritani bosib <b>mijoz manzilini</b> belgilang. Haydovchiga xabar boradi, mijozga esa jonli kuzatuv ssilkasi.</div>
+      <input id="gssilkaSoat" class="pf" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font-size:15px;margin-bottom:8px" placeholder="🕐 Yetkazish vaqti (masalan: 15:00, ixtiyoriy)">
+      <input id="gssilkaIzoh" class="pf" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px" placeholder="📝 Izoh — mijoz ismi/mahsulot (ixtiyoriy)">
+      <button class="btn-save" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--gold);color:#2e1c04;font-weight:700;cursor:pointer" id="gssilkaGen">🔗 Ssilka yaratish + haydovchiga xabar</button>
       <div class="ssilka-result" id="gssilkaResult">
-        <div style="color:var(--green);font-weight:600;font-size:14px">✅ Ssilka tayyor!</div>
+        <div style="color:var(--green);font-weight:600;font-size:14px">✅ Tayyor! Haydovchiga xabar bordi</div>
         <div class="ssilka-url" id="gssilkaUrl"></div>
-        <button style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--steel2);color:#fff;font-weight:700;cursor:pointer" onclick="gCopySsilka()">📋 Nusxa olish</button>
+        <button style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--steel2);color:#fff;font-weight:700;cursor:pointer" onclick="gCopySsilka()">📋 Mijozga yuborish (nusxa)</button>
       </div>
     </div>
   </div>
@@ -1105,6 +1107,11 @@ function renderGps(){
           <div style="font-size:12px;margin-top:2px">${st}</div>
         </div>
       </div>
+      <div style="background:var(--panel2);border-radius:10px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--muted)">🔑 GPS kod:</div>
+        <div style="font-size:20px;font-weight:800;letter-spacing:2px;color:var(--gold)">${h.kod||'—'}</div>
+        <button class="hb" style="flex:none;padding:8px 12px;font-size:12px" onclick="gCopyLink(${h.id})">🔗 Havola nusxa</button>
+      </div>
       <div class="hbtns">
         <button class="hb map" onclick="gShowMap(${h.id})">📍 Xaritada</button>
         <button class="hb ssilka" onclick="gShowSsilka(${h.id})">📤 Mijozga ssilka</button>
@@ -1174,16 +1181,28 @@ let gSsilkaCar=null;
 document.getElementById('gssilkaGen').addEventListener('click',async()=>{
   if(!gMijoz){ toast('📍 Avval xaritada mijoz manzilini belgilang'); return; }
   const ll=gMijoz.getLatLng();
-  const res=await apiPost('/api/yetkazish',{car_id:gSsilkaCar,lat:ll.lat,lon:ll.lng,izoh:''});
+  const soat=(document.getElementById('gssilkaSoat').value||'').trim();
+  const izoh=(document.getElementById('gssilkaIzoh').value||'').trim();
+  const res=await apiPost('/api/yetkazish',{car_id:gSsilkaCar,lat:ll.lat,lon:ll.lng,izoh,soat});
   if(res&&res.url){
     document.getElementById('gssilkaUrl').textContent=res.url;
     document.getElementById('gssilkaResult').classList.add('show');
-    toast('✅ Ssilka yaratildi');
+    toast('✅ Haydovchiga xabar bordi');
   }
 });
 window.gCopySsilka=function(){
   const u=document.getElementById('gssilkaUrl').textContent;
   navigator.clipboard.writeText(u).then(()=>toast('📋 Nusxa olindi')).catch(()=>toast(u));
+}
+// haydovchi kuzatuv havolasini nusxa (ega o'zi bermoqchi bo'lsa)
+window.gCopyLink=async function(cid){
+  try{
+    const r=await fetch('/api/haydovchi_kod?code='+encodeURIComponent(CODE())+'&id='+cid);
+    const d=await r.json();
+    const base=location.origin;
+    const link=base+'/kuzat/'+d.token;
+    navigator.clipboard.writeText(link).then(()=>toast('🔗 Havola nusxa olindi — haydovchiga yuboring')).catch(()=>prompt('Havola:',link));
+  }catch(e){ toast('❌ Xato'); }
 }
 window.gCloseModal=function(id){ document.getElementById(id).classList.remove('on'); }
 window.gShowMap=gShowMap; window.gShowSsilka=gShowSsilka;
@@ -1343,6 +1362,15 @@ function startApp(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
     document.querySelector('.tab[data-v="dash"]').classList.add('on');
   }
+  // avtomat yangilanish — botda tasdiqlasang web ko'radi (va aksincha)
+  setInterval(async ()=>{
+    if(document.hidden) return;              // ekran yopiq bo'lsa yangilamaymiz
+    if(document.querySelector('.gmodal.on')) return;  // GPS modal ochiq bo'lsa tegmaymiz
+    if(document.getElementById('modal').classList.contains('on')) return; // pul modal ochiq
+    const oldLen = LOG.length + SAL.length;
+    await loadData();
+    refreshAll();
+  }, 20000);
 }
 </script>
 </body>

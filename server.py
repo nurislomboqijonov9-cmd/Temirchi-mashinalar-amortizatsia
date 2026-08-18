@@ -408,9 +408,31 @@ def api_yol():
 def api_yetkazish():
     if not check_code(): return jsonify({"err":"kod"}), 401
     b=request.json or {}
-    tok=db.yetkazish_qosh(int(b["car_id"]), float(b["lat"]), float(b["lon"]), b.get("izoh"))
+    car_id=int(b["car_id"])
+    lat=float(b["lat"]); lon=float(b["lon"])
+    izoh=b.get("izoh") or ""
+    soat=b.get("soat") or ""  # mijozga yetkazish vaqti (ixtiyoriy)
+    tok=db.yetkazish_qosh(car_id, lat, lon, izoh)
     base=os.environ.get("WEBAPP_URL","").rstrip("/")
-    return jsonify({"ok":True, "token":tok, "url":f"{base}/yol/{tok}"})
+    url=f"{base}/yol/{tok}"
+    # haydovchiga Telegram xabar
+    car=[c for c in db.all_cars() if c["id"]==car_id]
+    car=car[0] if car else None
+    if car:
+        # shu moshinaga biriktirilgan haydovchi(lar)ni topamiz
+        hayd = [u for u in db.all_users() if u.get("car_id")==car_id and u["role"]=="haydovchi"]
+        xabar = (f"📦 <b>Yangi yetkazib berish!</b>\n\n"
+                 f"🚚 Moshina: {car['name']}\n"
+                 f"📍 Mahsulotni belgilangan manzilga yetkazing\n"
+                 + (f"🕐 Yetkazish vaqti: <b>{soat}</b>\n" if soat else "")
+                 + (f"📝 Izoh: {izoh}\n" if izoh else "")
+                 + f"\n🗺 Manzil xaritada: https://www.google.com/maps?q={lat},{lon}\n"
+                 + f"\nMijoz sizni jonli kuzatmoqda — GPS yoniq bo'lsin!")
+        for h in hayd:
+            _tg_msg(h["tg_id"], xabar)
+        if not hayd and OWNER_ID:
+            _tg_msg(OWNER_ID, f"⚠️ {car['name']} haydovchisi botga ulanmagan — xabar yuborilmadi. Havolani qo'lda bering.")
+    return jsonify({"ok":True, "token":tok, "url":url})
 
 @app.route("/api/yetkazish_yakun", methods=["POST"])
 def api_yetkazish_yakun():
