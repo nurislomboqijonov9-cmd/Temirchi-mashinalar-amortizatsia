@@ -1,7 +1,7 @@
 <!doctype html><html lang="uz"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TEMIRCHI — Karta</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;color:#eaf2ee}
@@ -25,8 +25,8 @@ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;col
 </div>
 <div class="stat" id="stat"></div>
 <div style="position:relative"><div id="map"></div><div class="empty" id="empty" style="display:none">Bu kunda ma'lumot yo'q.</div></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 const Q=new URLSearchParams(location.search);
 const HID=Q.get('hid'), TOK=Q.get('tok')||(()=>{try{return localStorage.getItem('tok')||''}catch(e){return''}})();
@@ -34,8 +34,8 @@ if(Q.get('nom')) document.getElementById('nom').textContent='🚚 '+Q.get('nom')
 document.getElementById('sana').value=Q.get('sana')||new Date().toISOString().slice(0,10);
 
 let map=L.map('map',{zoomControl:true,attributionControl:false}).setView([41.311,69.24],12);
-const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-const sputnik=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+const sputnik=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20});
 L.control.layers({"Ko'cha":kocha,"Sputnik":sputnik},null,{position:'topright'}).addTo(map);
 let layer=L.layerGroup().addTo(map), heat=null;
 const fmt=t=>(t||'').slice(11,16);

@@ -312,6 +312,9 @@ def osmand():
     except Exception: return "ok", 200
     try: acc=float(q.get("accuracy") or q.get("hdop") or 0)
     except Exception: acc=0.0
+    # juda noaniq nuqtani rad qilamiz (uchishni oldini oladi)
+    if acc and acc > 500:
+        db.car_seen(car["id"]); return "ok", 200
     vaqt=_osmand_vaqt(q.get("timestamp"))
     db.gps_qosh(car["id"], [{"lat":lat,"lon":lon,"vaqt":vaqt,"acc":acc}])
     if db.car_seen(car["id"]) and OWNER_ID:

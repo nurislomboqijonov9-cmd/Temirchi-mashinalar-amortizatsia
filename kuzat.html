@@ -107,7 +107,20 @@ let TOKEN=(function(){
 })();
 const $=id=>document.getElementById(id);
 let watchId=null, wake=null, lastP=null, lastT=0, tracking=false;
-let map=null, marker=null, acirc=null, trail=null, tpts=[], kmSum=0, prevLL=null, birinchi=true;
+let map=null, marker=null, acirc=null, trail=null, tpts=[], kmSum=0, prevLL=null, birinchi=true, lastKmT=0;
+// GPS silliqlash (Kalman-lite) — uchishni yo'qotadi
+let kf={lat:null,lon:null,variance:-1};
+function kalman(lat,lon,acc,tms){
+  const Q=3; // metr/sek — harakat "shovqini"
+  if(kf.variance<0){ kf.lat=lat; kf.lon=lon; kf.variance=acc*acc; kf.t=tms; return {lat,lon}; }
+  const dt=Math.max(0,(tms-kf.t)/1000); kf.t=tms;
+  kf.variance += dt*Q*Q;
+  const K = kf.variance/(kf.variance + acc*acc); // Kalman gain
+  kf.lat += K*(lat-kf.lat);
+  kf.lon += K*(lon-kf.lon);
+  kf.variance = (1-K)*kf.variance;
+  return {lat:kf.lat, lon:kf.lon};
+}
 
 // ==== OFFLINE saqlash (IndexedDB - ko'p sig'adi, ishonchli) ====
 let idb=null;
@@ -142,16 +155,31 @@ function initMap(){
   try{
     if(typeof L==='undefined') return;
     map=L.map('map',{zoomControl:false,attributionControl:false}).setView([41.311,69.24],15);
-    const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-    const sput=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
-    L.control.layers({"Ko'cha":kocha,"Sputnik":sput},null,{position:'topright'}).addTo(map);
-    trail=L.polyline([],{color:'#39d98a',weight:5,opacity:.85}).addTo(map);
+    // Ko'cha (sifatli, silliq — CartoDB Voyager)
+    const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+    // Sputnik (yo'ldosh rasm — Esri)
+    const sput=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20});
+    // Sputnik + ko'cha nomlari (gibrid)
+    const yozuv=L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}.png',{maxZoom:20,opacity:.9});
+    const gibrid=L.layerGroup([sput,yozuv]);
+    L.control.layers({"🗺 Ko'cha":kocha,"🛰 Sputnik":sput,"🛰 Sputnik+nom":gibrid},null,{position:'topright'}).addTo(map);
+    trail=L.polyline([],{color:'#2a6df0',weight:5,opacity:.9,lineJoin:'round',lineCap:'round'}).addTo(map);
   }catch(e){ map=null; }
 }
 function chiz(pt){
   $('s_vaqt').textContent=pt.vaqt.slice(11,16);
   const ll=[pt.lat,pt.lon];
-  if(prevLL) kmSum+=dist({lat:prevLL[0],lon:prevLL[1]},pt)/1000;
+  // km faqat ISHONCHLI harakatда qo'shiladi (sakrашni hisoblamaymiz)
+  if(prevLL){
+    const m = dist({lat:prevLL[0],lon:prevLL[1]},pt);  // metrda
+    const dt = (lastKmT ? (Date.now()-lastKmT)/1000 : 999); // sekund
+    const tezlik = dt>0 ? m/dt : 0;  // m/s
+    // qo'shamiz agar: 8m dan ko'p yurgan VA aniqlik yaxshi (<=60m) VA tezlik real (<40 m/s = 144 km/soat)
+    if(m>=8 && (pt.acc||0)<=60 && tezlik<40){
+      kmSum += m/1000;
+    }
+  }
+  lastKmT=Date.now();
   prevLL=ll; tpts.push(ll);
   $('s_km').textContent=kmSum.toFixed(1);
   if(!map || typeof L==='undefined') return;
@@ -168,11 +196,19 @@ async function onPos(p){
   const now=Date.now(); const acc=Math.round(p.coords.accuracy||0);
   const rang=acc<=30?'#39d98a':(acc<=100?'#f0c674':'#e06a6a');
   $('acc').innerHTML="<span style='color:"+rang+"'>● "+acc+" m</span>";
-  // juda noaniq (500m+) bo'lsagina tashlaymiz — aks holda qabul qilamiz
+  // juda noaniq (500m+) bo'lsagina tashlaymiz
   if(acc>500){ return; }
-  const pt={lat:p.coords.latitude,lon:p.coords.longitude,vaqt:tkVaqt(),acc:acc};
-  // bir joyda turган bo'lsa (20m ичida) va 15 sekunddan kam — takror yozmaymiz
-  if(lastP && (now-lastT)<15000 && dist(lastP,pt)<20){ return; }
+  // GPS SILLIQLASH — uchishni yo'qotadi
+  const s=kalman(p.coords.latitude, p.coords.longitude, Math.max(acc,10), now);
+  const pt={lat:s.lat,lon:s.lon,vaqt:tkVaqt(),acc:acc};
+  // SAKRASH aniqlash: oldingi ishonchli nuqtadan juda tez uzoqlashsa (imkonsiz) — tashlaymiz
+  if(lastP){
+    const m=dist(lastP,pt); const dt=(now-lastT)/1000;
+    const tez = dt>0 ? m/dt : 999;
+    if(tez>50 && acc>50){ return; }
+  }
+  // bir joyda turган bo'lsa (15m ичida) va 12 sekunddan kam — takror yozmaymiz
+  if(lastP && (now-lastT)<12000 && dist(lastP,pt)<15){ return; }
   lastP=pt; lastT=now;
   await idbAdd('pts',pt);
   chiz(pt); hideWarn(); flush();
@@ -270,11 +306,36 @@ async function start(){
   navigator.geolocation.getCurrentPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
-  if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); }
+  if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); setInterval(fonGps,15000); }
   ping(); flush();
   try{ if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen'); }catch(e){}
   // Service worker (fon uchun)
   try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-gps.js').catch(()=>{}); }catch(e){}
+  keepAlive();  // audio keep-alive (fonda uxlamasin)
+}
+
+// FON GPS — ekran o'chsa ham har 15 sekundda joy so'raymiz
+function fonGps(){
+  if(!tracking) return;
+  try{ navigator.geolocation.getCurrentPosition(onPos, ()=>{}, {enableHighAccuracy:true, maximumAge:5000, timeout:12000}); }catch(e){}
+}
+
+// AUDIO keep-alive — jimjit tovush, telefon fonda "musiqa" deb uxlamaydi
+let audioCtx=null;
+function keepAlive(){
+  try{
+    if(audioCtx) return;
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    audioCtx=new AC();
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    gain.gain.value=0.0001; // deyarli eshitilmaydi
+    osc.frequency.value=30;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start();
+    // ekran bosilганда audio kontekst tiklаш
+    document.addEventListener('click',()=>{ if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); },{once:false});
+  }catch(e){}
 }
 
 // wakeLock qayta olish (ekran o'chib yonganda)

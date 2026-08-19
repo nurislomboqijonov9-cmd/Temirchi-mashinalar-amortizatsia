@@ -1,7 +1,7 @@
 <!doctype html><html lang="uz"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TEMIRCHI — Jonli kuzatuv</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;color:#eaf2ee}
@@ -23,12 +23,20 @@ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1720;col
   <button id="share" style="background:#1E7A5A;border:none;color:#fff;border-radius:9px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer">📤 Ulashish</button>
 </div>
 <div style="position:relative"><div id="map"></div><div class="msg" id="msg" style="display:none"></div></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+if(typeof L==='undefined'){
+  document.getElementById('st').textContent="Xarita yuklanmadi — internet tekshiring";
+  document.getElementById('msg').style.display='block';
+  document.getElementById('msg').textContent='⚠️ Internet aloqasi zaif. Sahifani yangilang.';
+}
+</script>
 <script>
 const TOKEN=location.pathname.split('/').filter(Boolean).pop();
+if(typeof L!=='undefined'){
 let map=L.map('map',{zoomControl:true,attributionControl:false}).setView([41.311,69.24],13);
-const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-const sputnik=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+const sputnik=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20});
 L.control.layers({"Ko'cha":kocha,"Sputnik":sputnik},null,{position:'topright'}).addTo(map);
 let marker=null, halq=null, aylana=null, birinchi=true;
 const truckIcon=L.divIcon({className:'',html:'<div class="truck">🚚</div>',iconSize:[34,34],iconAnchor:[17,17]});
@@ -64,4 +72,5 @@ document.getElementById('share').onclick=async function(){
   try{ if(navigator.share){ await navigator.share({title:'Jonli kuzatuv',url:u}); return; } }catch(e){}
   try{ await navigator.clipboard.writeText(u); alert('✅ Havola nusxalandi — mijozga yuboring'); }catch(e){ prompt('Havola:',u); }
 };
+}
 </script></body></html>

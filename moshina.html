@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TEMIRCHI — Moshina hisobot</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#17222e; --panel2:#1e2c3a; --line:#2a3b4d;
@@ -1114,6 +1114,7 @@ function renderGps(){
         <div style="font-size:13px;color:var(--muted)">🔑 GPS kod:</div>
         <div style="font-size:20px;font-weight:800;letter-spacing:2px;color:var(--gold)">${h.kod||'—'}</div>
         <button class="hb" style="flex:none;padding:8px 12px;font-size:12px" onclick="gCopyLink(${h.id})">🔗 Havola nusxa</button>
+        <button class="hb" style="flex:none;padding:8px 12px;font-size:12px;color:var(--steel)" onclick="gTraccar(${h.id})">⚙️ Traccar sozlash</button>
       </div>
       <div class="hbtns">
         <button class="hb map" onclick="gShowMap(${h.id})">📍 Xarita (yo'l)</button>
@@ -1203,6 +1204,23 @@ window.gJonli=async function(cid){
     const d=await r.json();
     window.open('/jonli/'+d.share, '_blank');
   }catch(e){ toast('❌ Xato'); }
+}
+// Traccar sozlash ma'lumoti
+window.gTraccar=function(cid){
+  const h=GPS_DATA.find(x=>x.id===cid); if(!h) return;
+  const host=location.host;
+  const url=`https://${host}`;
+  const matn=`⚙️ TRACCAR CLIENT SOZLASH\n${h.ism||h.moshina} uchun:\n\n`+
+    `1. Play Market'dan "Traccar Client" o'rnating\n\n`+
+    `2. Sozlamalarni kiriting:\n`+
+    `• Server URL: ${url}\n`+
+    `• Device identifier (ID): ${h.kod}\n`+
+    `• Frequency: 30 (sekund)\n`+
+    `• Accuracy: High\n\n`+
+    `3. Yuqoridagi "Service status" ni YONIQ qiling\n\n`+
+    `Server manzili nusxa olindi!`;
+  navigator.clipboard.writeText(url).catch(()=>{});
+  alert(matn);
 }
 window.gCloseModal=function(id){ document.getElementById(id).classList.remove('on'); }
 window.gShowMap=gShowMap; window.gShowSsilka=gShowSsilka;
