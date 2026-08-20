@@ -34,7 +34,7 @@ if(Q.get('nom')) document.getElementById('nom').textContent='🚚 '+Q.get('nom')
 document.getElementById('sana').value=Q.get('sana')||new Date().toISOString().slice(0,10);
 
 let map=L.map('map',{zoomControl:true,attributionControl:false}).setView([41.311,69.24],12);
-const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+const kocha=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 const sputnik=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20});
 L.control.layers({"Ko'cha":kocha,"Sputnik":sputnik},null,{position:'topright'}).addTo(map);
 let layer=L.layerGroup().addTo(map), heat=null;
@@ -67,7 +67,9 @@ async function yukla(){
   L.polyline(line,{color:'#06233d',weight:8,opacity:.6}).addTo(layer);       // kant (kontrast)
   L.polyline(line,{color:'#ffffff',weight:4,opacity:.95}).addTo(layer);      // asosiy chiziq
   L.circleMarker(line[0],{radius:7,color:'#fff',fillColor:'#2ecc71',fillOpacity:1,weight:2}).bindPopup('▶️ Boshi '+fmt(pts[0].vaqt)).addTo(layer);
-  L.circleMarker(line[line.length-1],{radius:7,color:'#fff',fillColor:'#e74c3c',fillOpacity:1,weight:2}).bindPopup('⏹ Oxiri '+fmt(pts[pts.length-1].vaqt)).addTo(layer);
+  // oxirgi nuqta — rangli gruz moshina (hozirgi joy)
+  const trukHtml='<div style="filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))"><svg width="48" height="34" viewBox="0 0 48 34"><ellipse cx="24" cy="31" rx="17" ry="3" fill="rgba(0,0,0,.15)"/><rect x="3" y="9" width="26" height="15" rx="2.5" fill="#F5A623"/><rect x="3" y="9" width="26" height="5" rx="2.5" fill="#E8951C"/><rect x="29" y="12" width="13" height="12" rx="2.5" fill="#EE5A3A"/><rect x="31" y="14" width="8" height="5" rx="1.5" fill="#BEE3F8"/><circle cx="12" cy="26" r="4" fill="#2D2D2D"/><circle cx="12" cy="26" r="1.8" fill="#888"/><circle cx="34" cy="26" r="4" fill="#2D2D2D"/><circle cx="34" cy="26" r="1.8" fill="#888"/></svg></div>';
+  L.marker(line[line.length-1],{icon:L.divIcon({className:'',html:trukHtml,iconSize:[48,34],iconAnchor:[24,28]}),zIndexOffset:1000}).bindPopup('🚚 Hozirgi joy '+fmt(pts[pts.length-1].vaqt)).addTo(layer);
 
   // ===== To'xtashlar — tepasida necha daqiqa =====
   stops.forEach(s=>{

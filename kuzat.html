@@ -151,6 +151,18 @@ function tkVaqt(){ const d=new Date(); const tk=new Date(d.getTime()+(d.getTimez
   const p=n=>String(n).padStart(2,'0');
   return tk.getFullYear()+'-'+p(tk.getMonth()+1)+'-'+p(tk.getDate())+'T'+p(tk.getHours())+':'+p(tk.getMinutes())+':'+p(tk.getSeconds()); }
 
+function trukSvg(){
+  return '<div style="filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))">'+
+    '<svg width="48" height="34" viewBox="0 0 48 34">'+
+    '<ellipse cx="24" cy="31" rx="17" ry="3" fill="rgba(0,0,0,.15)"/>'+  // soya
+    '<rect x="3" y="9" width="26" height="15" rx="2.5" fill="#F5A623"/>'+  // kuzov (sariq)
+    '<rect x="3" y="9" width="26" height="5" rx="2.5" fill="#E8951C"/>'+   // kuzov tepa
+    '<rect x="29" y="12" width="13" height="12" rx="2.5" fill="#EE5A3A"/>'+ // kabina (qizil)
+    '<rect x="31" y="14" width="8" height="5" rx="1.5" fill="#BEE3F8"/>'+  // oyna
+    '<circle cx="12" cy="26" r="4" fill="#2D2D2D"/><circle cx="12" cy="26" r="1.8" fill="#888"/>'+  // g'ildirak
+    '<circle cx="34" cy="26" r="4" fill="#2D2D2D"/><circle cx="34" cy="26" r="1.8" fill="#888"/>'+  // g'ildirak
+    '</svg></div>';
+}
 function initMap(){
   try{
     if(typeof L==='undefined') return;
@@ -186,7 +198,7 @@ function chiz(pt){
   if(!map || typeof L==='undefined') return;
   try{
     if(!marker){
-      marker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div style="font-size:30px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">🚚</div>',iconSize:[34,34],iconAnchor:[17,17]})}).addTo(map);
+      marker=L.marker(ll,{icon:L.divIcon({className:'',html:trukSvg(),iconSize:[48,34],iconAnchor:[24,28]})}).addTo(map);
       acirc=L.circle(ll,{radius:pt.acc||20,color:'#39d98a',weight:1,fillColor:'#39d98a',fillOpacity:.1}).addTo(map);
     }else{ marker.setLatLng(ll); acirc.setLatLng(ll); acirc.setRadius(pt.acc||20); }
     if(trail) trail.setLatLngs(tpts);
