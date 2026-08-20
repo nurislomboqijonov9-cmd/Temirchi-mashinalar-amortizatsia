@@ -1115,6 +1115,7 @@ function renderGps(){
         <div style="font-size:20px;font-weight:800;letter-spacing:2px;color:var(--gold)">${h.kod||'—'}</div>
         <button class="hb" style="flex:none;padding:8px 12px;font-size:12px" onclick="gCopyLink(${h.id})">🔗 Havola nusxa</button>
         <button class="hb" style="flex:none;padding:8px 12px;font-size:12px;color:var(--steel)" onclick="gTraccar(${h.id})">⚙️ Traccar sozlash</button>
+        <button class="hb" style="flex:none;padding:8px 12px;font-size:12px;color:var(--green)" onclick="gTel(${h.id})">📞 ${h.tel?h.tel:'Raqam'}</button>
       </div>
       <div class="hbtns">
         <button class="hb map" onclick="gShowMap(${h.id})">📍 Xarita (yo'l)</button>
@@ -1206,6 +1207,14 @@ window.gJonli=async function(cid){
   }catch(e){ toast('❌ Xato'); }
 }
 // Traccar sozlash ma'lumoti
+// haydovchi telefon raqamini kiritish
+window.gTel=async function(cid){
+  const h=GPS_DATA.find(x=>x.id===cid); if(!h) return;
+  const tel=prompt("Haydovchi telefon raqami (mijoz qo'ng'iroq qiladi):", h.tel||"+998");
+  if(tel===null) return;
+  await apiPost('/api/haydovchi_tel',{car_id:cid,tel:tel.trim()});
+  await loadGps(); renderGps(); toast('📞 Raqam saqlandi');
+}
 window.gTraccar=function(cid){
   const h=GPS_DATA.find(x=>x.id===cid); if(!h) return;
   const host=location.host;

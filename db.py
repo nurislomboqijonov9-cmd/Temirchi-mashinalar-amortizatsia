@@ -107,7 +107,8 @@ def init_db():
         try:
             ccols2 = [r[1] for r in c.execute("PRAGMA table_info(cars)").fetchall()]
             for col, ddl in [("kuzat_token","TEXT"),("share_token","TEXT"),
-                             ("gps_kod","TEXT"),("last_seen","TEXT"),("offline_xabar","INTEGER DEFAULT 0")]:
+                             ("gps_kod","TEXT"),("last_seen","TEXT"),("offline_xabar","INTEGER DEFAULT 0"),
+                             ("tel","TEXT")]:
                 if col not in ccols2:
                     c.execute(f"ALTER TABLE cars ADD COLUMN {col} {ddl}")
         except Exception as e:
@@ -383,7 +384,22 @@ def gps_stops(points, min_daq=5, radius_m=60):
 
 def kunlik_xulosa(car_id, sana):
     pts=gps_kunlik(car_id,sana); stops=gps_stops(pts)
-    dist=sum(_dist_m(pts[k-1],pts[k]) for k in range(1,len(pts)))
+    # km — sakrashsiz: har segment aniqligini va tezligini tekshiramiz
+    dist=0.0
+    for k in range(1,len(pts)):
+        a,b=pts[k-1],pts[k]
+        m=_dist_m(a,b)
+        # juda noaniq nuqta (60m+) yoki juda kichik harakat (8m-) hisoblanmaydi
+        acc_b=b.get("acc") or 0
+        if m<8 or acc_b>60:
+            continue
+        # tezlik tekshiruvi (sakrash = imkonsiz tez)
+        dt=_min(a["vaqt"],b["vaqt"])*60  # sekund
+        if dt>0:
+            tez=m/dt  # m/s
+            if tez>40:  # 144 km/soat dan tez = GPS xatosi
+                continue
+        dist+=m
     ish=""
     if pts: ish=pts[0]["vaqt"][11:16]+" – "+pts[-1]["vaqt"][11:16]
     return {"nuqtalar":pts,"toxtashlar":stops,"km":round(dist/1000,1),"soni":len(pts),
@@ -441,4 +457,9 @@ def yetkazish_faol_car(car_id):
 def yetkazish_yakunla(token):
     with _lock, _conn() as c:
         c.execute("UPDATE yetkazish SET holat='yakunlandi', yakun=? WHERE token=?", (now_tk().isoformat(),token))
+        c.commit()
+
+def set_car_tel(car_id, tel):
+    with _lock, _conn() as c:
+        c.execute("UPDATE cars SET tel=? WHERE id=?", (tel, car_id))
         c.commit()

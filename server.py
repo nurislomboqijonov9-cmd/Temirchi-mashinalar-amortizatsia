@@ -358,6 +358,7 @@ def api_haydovchilar():
             "online":online, "gps":g,
             "yosh_daq": (round(db.gps_age_daqiqa(g["vaqt"]),1) if g else None),
             "kod": db.car_gps_kod(c["id"]),
+            "tel": c.get("tel") or "",
         })
     return jsonify({"haydovchilar":res})
 
@@ -392,6 +393,14 @@ def api_haydovchi_kod():
     if not check_code(): return jsonify({"err":"kod"}), 401
     cid=int(request.args.get("id",0))
     return jsonify({"token":db.car_gps_token(cid), "kod":db.car_gps_kod(cid), "share":db.car_share_token(cid)})
+
+# haydovchi telefon raqamini saqlash
+@app.route("/api/haydovchi_tel", methods=["POST"])
+def api_haydovchi_tel():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    b=request.json or {}
+    db.set_car_tel(int(b["car_id"]), (b.get("tel") or "").strip())
+    return jsonify({"ok":True})
 
 # ---- kuzat.html (haydovchi GPS yuboradigan sahifa) ----
 @app.route("/kuzat")
@@ -449,9 +458,11 @@ def api_yol():
     if not y: return jsonify({"ok":False}), 404
     g=db.gps_oxirgi(y["car_id"])
     car=[c for c in db.all_cars() if c["id"]==y["car_id"]]
+    c0=car[0] if car else None
     return jsonify({"ok":True, "holat":y["holat"],
                     "mijoz":{"lat":y["mlat"],"lon":y["mlon"]}, "izoh":y.get("izoh"),
-                    "haydovchi":g, "ism":(car[0]["driver"] if car else "Haydovchi"),
+                    "haydovchi":g, "ism":(c0["driver"] if c0 else "Haydovchi"),
+                    "raqam":(c0.get("name") if c0 else ""), "tel":(c0.get("tel") if c0 else ""),
                     "online":db.car_online(y["car_id"])})
 
 # mijozga ssilka yaratish (ega)
