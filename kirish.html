@@ -1,0 +1,60 @@
+<!doctype html><html lang="uz"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1720"><title>TEMIRCHI — Kirish</title>
+<link rel="manifest" href="/manifest-hayd.json">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+html,body{height:100%}
+body{background:linear-gradient(160deg,#0f1720,#16294A);display:flex;align-items:center;justify-content:center;padding:26px;min-height:100vh}
+.card{width:100%;max-width:360px;text-align:center}
+.logo{width:88px;height:88px;border-radius:22px;background:#16294A;display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 20px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+h1{color:#eaf2ee;font-size:26px;font-weight:800;margin-bottom:4px}
+h1 i{color:#39d98a;font-style:normal}
+.sub{color:#8aa0a8;font-size:14px;margin-bottom:32px}
+.inp{width:100%;padding:16px;border-radius:14px;border:1.5px solid #2a3b4d;background:#0f1a22;color:#eaf2ee;font-size:18px;text-align:center;letter-spacing:1px;margin-bottom:14px;outline:none}
+.inp:focus{border-color:#39d98a}
+.btn{width:100%;padding:16px;border:none;border-radius:14px;background:#1E7A5A;color:#fff;font-size:17px;font-weight:800;cursor:pointer;transition:.15s}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5}
+.err{color:#e06a6a;font-size:14px;margin-top:14px;min-height:20px}
+.hint{color:#5f7585;font-size:12px;margin-top:24px;line-height:1.6}
+</style></head>
+<body>
+<div class="card">
+  <div class="logo">🚚</div>
+  <h1>TEMIR<i>CHI</i></h1>
+  <div class="sub">Moshina hisobot va GPS tizimi</div>
+  <input class="inp" id="kod" type="text" placeholder="Kodni kiriting" autocomplete="off" inputmode="text">
+  <button class="btn" id="btn" onclick="kir()">Kirish</button>
+  <div class="err" id="err"></div>
+  <div class="hint">Ega yoki haydovchi kodingizni kiriting.<br>Kod egada bo'ladi.</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+// avval saqlangan kirish bormi
+try{
+  const saved=localStorage.getItem('temirchi_rol');
+  if(saved==='ega'){ location.href='/moshina'; }
+  else if(saved==='haydovchi'){ const t=localStorage.getItem('hayd_token'); if(t) location.href='/kuzat/'+t; }
+}catch(e){}
+
+async function kir(){
+  const kod=$('kod').value.trim();
+  if(!kod){ $('err').textContent='Kodni kiriting'; return; }
+  $('btn').disabled=true; $('err').textContent='Tekshirilmoqda...';
+  try{
+    const r=await fetch('/api/kirish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kod})});
+    const d=await r.json();
+    if(!d.ok){ $('err').textContent=d.xato||"Kod noto'g'ri"; $('btn').disabled=false; return; }
+    if(d.rol==='ega'){
+      try{ localStorage.setItem('temirchi_rol','ega'); localStorage.setItem('temirchi_kod',kod); }catch(e){}
+      location.href='/moshina';
+    } else if(d.rol==='haydovchi'){
+      try{ localStorage.setItem('temirchi_rol','haydovchi'); localStorage.setItem('hayd_token',d.token); }catch(e){}
+      location.href='/kuzat/'+d.token;
+    }
+  }catch(e){ $('err').textContent='Xatolik, qayta urining'; $('btn').disabled=false; }
+}
+$('kod').addEventListener('keydown',e=>{ if(e.key==='Enter') kir(); });
+</script></body></html>

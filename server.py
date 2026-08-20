@@ -53,7 +53,15 @@ def check_code():
 # ---------- static: web ilova ----------
 @app.route("/")
 def index():
+    return send_from_directory(".", "kirish.html")
+
+@app.route("/moshina")
+def moshina_page():
     return send_from_directory(".", "moshina.html")
+
+@app.route("/kirish")
+def kirish_page():
+    return send_from_directory(".", "kirish.html")
 
 @app.route("/logo.png")
 def logo():
@@ -430,6 +438,22 @@ def api_kuzat_kirish():
     if not car: return jsonify({"ok":False}), 404
     return jsonify({"ok":True, "token":db.car_gps_token(car["id"]),
                     "ism":car["driver"], "moshina":car["name"]})
+
+# ---- UNIVERSAL kirish: ega kodi yoki haydovchi kodi ----
+@app.route("/api/kirish", methods=["POST"])
+def api_kirish():
+    b=request.json or {}
+    kod=str(b.get("kod","")).strip()
+    # 1. ega kodimi? (Temirchi-2015)
+    if kod == KIRISH_KODI:
+        return jsonify({"ok":True, "rol":"ega"})
+    # 2. haydovchi kodimi? (6 xonali GPS kod)
+    car=db.car_by_gps_kod(kod)
+    if car:
+        return jsonify({"ok":True, "rol":"haydovchi",
+                        "token":db.car_gps_token(car["id"]),
+                        "ism":car["driver"], "moshina":car["name"]})
+    return jsonify({"ok":False, "xato":"Kod noto'g'ri"}), 404
 
 # ---- jonli kuzatuv (ega) ----
 @app.route("/jonli")

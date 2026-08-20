@@ -421,8 +421,10 @@
   }
   document.getElementById('loginBtn').addEventListener('click', tryLogin);
   document.getElementById('loginCode').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
-  // avval kirgan bo'lsa avtomat
-  if(saved){ doEnter(saved).then(ok=>{ if(!ok) sessionStorage.removeItem('temirchi_auth'); }); }
+  // kirish.html dan kelgan kod (localStorage) yoki avval kirgan (sessionStorage)
+  let auto = saved;
+  try{ if(!auto && localStorage.getItem('temirchi_rol')==='ega') auto = localStorage.getItem('temirchi_kod'); }catch(e){}
+  if(auto){ doEnter(auto).then(ok=>{ if(!ok){ sessionStorage.removeItem('temirchi_auth'); } }); }
 })();
 
 // ============ MA'LUMOT (serverdan yuklanadi) ============
