@@ -328,8 +328,16 @@ async function start(){
   if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); setInterval(fonGps,15000); }
   ping(); flush();
   try{ if('wakeLock' in navigator) wake=await navigator.wakeLock.request('screen'); }catch(e){}
-  // Service worker (fon uchun)
-  try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-gps.js').catch(()=>{}); }catch(e){}
+  // Service worker + periodic background sync (fon uchun)
+  try{
+    if('serviceWorker' in navigator){
+      const reg=await navigator.serviceWorker.register('/sw-gps.js').catch(()=>null);
+      if(reg){
+        navigator.serviceWorker.addEventListener('message',e=>{ if(e.data&&e.data.type==='flush'){ fonGps(); flush(); } });
+        if('periodicSync' in reg){ try{ await reg.periodicSync.register('gps-flush',{minInterval:15000}); }catch(e){} }
+      }
+    }
+  }catch(e){}
   keepAlive();  // audio keep-alive (fonda uxlamasin)
 }
 
@@ -337,25 +345,58 @@ async function start(){
 function fonGps(){
   if(!tracking) return;
   try{ navigator.geolocation.getCurrentPosition(onPos, ()=>{}, {enableHighAccuracy:true, maximumAge:5000, timeout:12000}); }catch(e){}
-}
-
-// AUDIO keep-alive — jimjit tovush, telefon fonda "musiqa" deb uxlamaydi
-let audioCtx=null;
-function keepAlive(){
+  // watchPosition ba'zan fonda o'ladi — qayta yoqamiz
   try{
-    if(audioCtx) return;
-    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
-    audioCtx=new AC();
-    const osc=audioCtx.createOscillator();
-    const gain=audioCtx.createGain();
-    gain.gain.value=0.0001; // deyarli eshitilmaydi
-    osc.frequency.value=30;
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start();
-    // ekran bosilганда audio kontekst tiklаш
-    document.addEventListener('click',()=>{ if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); },{once:false});
+    if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+    watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
   }catch(e){}
 }
+
+// AUDIO keep-alive — jimjit ovoz LOOP, telefon "musiqa ijro etilyapti" deb fonda uxlamaydi
+let audioCtx=null, silentAudio=null;
+function keepAlive(){
+  try{
+    // 1-usul: WebAudio oscillator (jimjit)
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC && !audioCtx){
+      audioCtx=new AC();
+      const osc=audioCtx.createOscillator();
+      const gain=audioCtx.createGain();
+      gain.gain.value=0.0015; // deyarli eshitilmaydi, lekin tizim "ovoz bor" deydi
+      osc.frequency.value=40;
+      osc.type='sine';
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start();
+    }
+    // 2-usul: jimjit WAV loop (Media Session — eng kuchli, ekran o'chsa ham davom etadi)
+    if(!silentAudio){
+      silentAudio=new Audio(SILENT_WAV);
+      silentAudio.loop=true;
+      silentAudio.volume=0.01;
+      silentAudio.play().catch(()=>{});
+      // Media Session — "TEMIRCHI GPS yoniq" (tizim uni ushlab turadi)
+      if('mediaSession' in navigator){
+        try{
+          navigator.mediaSession.metadata=new MediaMetadata({title:'TEMIRCHI — GPS yoniq',artist:'Haydovchi kuzatuvi'});
+          navigator.mediaSession.setActionHandler('pause',()=>{ silentAudio.play().catch(()=>{}); });
+        }catch(e){}
+      }
+    }
+    // bosilganda tiklash
+    document.addEventListener('click',()=>{
+      if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
+      if(silentAudio&&silentAudio.paused) silentAudio.play().catch(()=>{});
+    });
+    // audio to'xtasa qayta yoqamiz (har 10 sek tekshirish)
+    setInterval(()=>{
+      if(!tracking) return;
+      if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
+      if(silentAudio&&silentAudio.paused) silentAudio.play().catch(()=>{});
+    },10000);
+  }catch(e){}
+}
+// jimjit WAV (base64, 1 sekund) — loop bo'lganda tizim "ovoz ijro etilyapti" deydi
+const SILENT_WAV='data:audio/wav;base64,UklGRsQPAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YaAPAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
 
 // wakeLock qayta olish (ekran o'chib yonganda)
 document.addEventListener('visibilitychange',async()=>{

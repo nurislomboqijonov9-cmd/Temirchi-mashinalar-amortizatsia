@@ -105,6 +105,28 @@ def handle_callback(cb):
     from_id = cb["from"]["id"]
     cb_id = cb["id"]
 
+    # haydovchi botdan "Yetkazdim" bosdi — bu HAMMAGA ochiq (ega tekshiruvidan oldin)
+    if data.startswith("yetdi_"):
+        tok = data[6:]
+        y = db.yetkazish_get(tok)
+        # faqat shu yetkazishning haydovchisi yoki ega bosa oladi
+        ruxsat = (from_id == OWNER_ID)
+        if y and not ruxsat:
+            hayd = [u for u in db.all_users() if u.get("car_id") == y["car_id"] and u["role"] == "haydovchi"]
+            ruxsat = any(h["tg_id"] == from_id for h in hayd)
+        if not ruxsat:
+            answer_cb(cb_id, "Ruxsat yo'q")
+            return
+        db.yetkazish_yakunla(tok)
+        answer_cb(cb_id, "✅ Yetkazildi!")
+        _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+             message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+        if y:
+            car = [c for c in db.all_cars() if c["id"] == y["car_id"]]
+            nm = car[0]["driver"] if car else "Haydovchi"
+            send(OWNER_ID, f"✅ <b>{nm}</b> mijozga yetkazib berdi!")
+        return
+
     if from_id != OWNER_ID:
         answer_cb(cb_id, "Faqat ega tasdiqlaydi")
         return
@@ -155,21 +177,6 @@ def handle_callback(cb):
              message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
         hayd_txt = "✅ Haydovchiga xabar yuborildi" if hayd else "⚠️ Haydovchi botga ulanmagan"
         send(OWNER_ID, f"✅ <b>{car['driver']}</b> ({car['name']})ga yetkazish biriktirildi!\n{hayd_txt}\n\n📎 Mijozga havola (yuboring):\n{url}")
-        return
-
-    # haydovchi botdan "Yetkazdim" bosdi
-    if data.startswith("yetdi_"):
-        tok = data[6:]
-        db.yetkazish_yakunla(tok)
-        answer_cb(cb_id, "✅ Yetkazildi!")
-        _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
-             message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
-        # egaga xabar
-        y = db.yetkazish_get(tok)
-        if y:
-            car = [c for c in db.all_cars() if c["id"] == y["car_id"]]
-            nm = car[0]["driver"] if car else "Haydovchi"
-            send(OWNER_ID, f"✅ <b>{nm}</b> mijozga yetkazib berdi!")
         return
 
     # ok_haydovchi_123 / ok_nazoratchi_123 / ok_rad_123
