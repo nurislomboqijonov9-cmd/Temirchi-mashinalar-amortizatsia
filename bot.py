@@ -132,21 +132,44 @@ def handle_callback(cb):
         tok = db.yetkazish_qosh(car_id, loc["lat"], loc["lon"], "")
         base = WEBAPP_URL.rstrip("/")
         url = f"{base}/yol/{tok}"
-        # haydovchiga xabar
+        # haydovchining GPS ilova havolasi (kuzat)
+        kuzat_tok = db.car_gps_token(car_id)
+        kuzat_url = f"{base}/kuzat/{kuzat_tok}"
+        # haydovchiga xabar + GPS ilova tugmasi + Yetdim tugmasi
         hayd = [u for u in db.all_users() if u.get("car_id") == car_id and u["role"] == "haydovchi"]
         xabar = (f"📦 <b>Yangi yetkazib berish!</b>\n\n"
                  f"🚚 {car['name']}\n"
                  f"📍 Mahsulotni belgilangan manzilga yetkazing\n"
-                 f"🗺 Manzil: https://www.google.com/maps?q={loc['lat']},{loc['lon']}\n\n"
-                 f"Mijoz sizni jonli kuzatmoqda — GPS yoniq bo'lsin!")
+                 f"🗺 Manzil xaritada: https://www.google.com/maps?q={loc['lat']},{loc['lon']}\n\n"
+                 f"👇 Pastdagi tugmani bosing — GPS ochiladi, mijozgacha yo'l ko'rsatiladi.\n"
+                 f"Yetkazgach «✅ Yetkazdim» tugmasini bosing.")
+        hkb = [
+            [{"text": "🗺 GPS ochish + yo'l", "url": kuzat_url}],
+            [{"text": "✅ Yetkazdim", "callback_data": f"yetdi_{tok}"}]
+        ]
         for h in hayd:
-            send(h["tg_id"], xabar)
+            send(h["tg_id"], xabar, keyboard=hkb)
         _pending_loc.pop(from_id, None)
         answer_cb(cb_id, "Biriktirildi!")
         _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
              message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
         hayd_txt = "✅ Haydovchiga xabar yuborildi" if hayd else "⚠️ Haydovchi botga ulanmagan"
-        send(OWNER_ID, f"✅ <b>{car['driver']}</b> ({car['name']})ga yetkazish biriktirildi!\n{hayd_txt}\n\n📎 Mijozga havola:\n{url}")
+        send(OWNER_ID, f"✅ <b>{car['driver']}</b> ({car['name']})ga yetkazish biriktirildi!\n{hayd_txt}\n\n📎 Mijozga havola (yuboring):\n{url}")
+        return
+
+    # haydovchi botdan "Yetkazdim" bosdi
+    if data.startswith("yetdi_"):
+        tok = data[6:]
+        db.yetkazish_yakunla(tok)
+        answer_cb(cb_id, "✅ Yetkazildi!")
+        _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+             message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+        # egaga xabar
+        y = db.yetkazish_get(tok)
+        if y:
+            car = [c for c in db.all_cars() if c["id"] == y["car_id"]]
+            nm = car[0]["driver"] if car else "Haydovchi"
+            send(OWNER_ID, f"✅ <b>{nm}</b> mijozga yetkazib berdi!")
         return
 
     # ok_haydovchi_123 / ok_nazoratchi_123 / ok_rad_123
