@@ -268,13 +268,20 @@ def api_gps():
     if not car:
         return jsonify({"ok": False, "xato": "token"}), 404
     n = db.gps_qosh(car["id"], b.get("points") or [])
-    if db.car_seen(car["id"]) and OWNER_ID:
-        _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
+    yangi_online = db.car_seen(car["id"])  # offlinedan onlinega o'tdimi
     # haydovchiga biriktirilgan faol yetkazish bormi?
     y = db.yetkazish_faol_car(car["id"])
     manzil = None
     if y:
         manzil = {"lat": y["mlat"], "lon": y["mlon"], "izoh": y.get("izoh") or "", "token": y["token"]}
+    # yangi online bo'ldi -> egaga xabar (aniq: yetkazish bormi)
+    if yangi_online and OWNER_ID:
+        nm = car.get('driver') or car.get('name')
+        if y:
+            izoh = (" · "+y.get("izoh")) if y.get("izoh") else ""
+            _tg_msg(OWNER_ID, f"🚚 <b>{nm}</b> yo'lga tushdi — mijozga ketyapti{izoh}\n🟢 GPS yoniq, jonli kuzatuv boshlandi")
+        else:
+            _tg_msg(OWNER_ID, f"🟢 <b>{nm}</b> — GPS yoqildi (online)")
     return jsonify({"ok": True, "saqlandi": n, "yetkazish": manzil})
 
 # haydovchi yetkazishni yakunladi (yetib bordim)
@@ -525,10 +532,16 @@ def sw_gps():
 @app.route("/manifest-hayd.json")
 def manifest_hayd():
     return jsonify({
-        "name":"TEMIRCHI Haydovchi","short_name":"TEMIRCHI","start_url":"/kuzat",
-        "display":"standalone","background_color":"#0f1720","theme_color":"#0f1720",
-        "icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},
-                 {"src":"/icon-512.png","sizes":"512x512","type":"image/png"}]
+        "id":"/kuzat",
+        "name":"TEMIRCHI Haydovchi","short_name":"TEMIRCHI",
+        "description":"TEMIRCHI haydovchilar uchun GPS kuzatuv va yetkazib berish ilovasi",
+        "start_url":"/kuzat",
+        "display":"standalone","orientation":"portrait",
+        "background_color":"#0f1720","theme_color":"#0f1720",
+        "categories":["navigation","productivity"],
+        "icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+                 {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+                 {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]
     })
 
 # ---------- bot ishga tushirish ----------
