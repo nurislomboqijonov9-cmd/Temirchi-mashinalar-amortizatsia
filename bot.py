@@ -73,6 +73,33 @@ def handle_start(user):
     send(OWNER_ID, f"👤 <b>Yangi odam</b> botga kirdi:\n\n<b>{name}</b>\nID: <code>{tg_id}</code>\n\nKim bu?", keyboard=kb)
 
 # ---------- tasdiqlash (ega bosadi) ----------
+# ---------- ega lokatsiya tashlaydi -> haydovchiga biriktirish ----------
+# vaqtincha saqlash (chat_id -> {lat, lon})
+_pending_loc = {}
+
+def handle_location(msg):
+    who = msg["from"]["id"]
+    # faqat ega yoki nazoratchi lokatsiya biriktira oladi
+    u = db.get_user(who)
+    is_ega = (who == OWNER_ID) or (u and u["role"] in ("ega", "nazoratchi"))
+    if not is_ega:
+        return
+    loc = msg["location"]
+    lat, lon = loc["latitude"], loc["longitude"]
+    _pending_loc[who] = {"lat": lat, "lon": lon}
+    # haydovchilar ro'yxati tugmalar bilan
+    cars = db.all_cars()
+    if not cars:
+        send(who, "🚚 Haydovchilar yo'q.")
+        return
+    kb = []
+    for c in cars:
+        online = "🟢" if db.car_online(c["id"]) else "🔴"
+        kb.append([{"text": f"{online} {c['driver']} · {c['name']}",
+                    "callback_data": f"yetk_{c['id']}"}])
+    kb.append([{"text": "❌ Bekor qilish", "callback_data": "yetk_bekor"}])
+    send(who, f"📍 <b>Lokatsiya qabul qilindi!</b>\n\nQaysi haydovchiga yetkazishni biriktiramiz?", keyboard=kb)
+
 def handle_callback(cb):
     data = cb["data"]
     from_id = cb["from"]["id"]
@@ -80,6 +107,46 @@ def handle_callback(cb):
 
     if from_id != OWNER_ID:
         answer_cb(cb_id, "Faqat ega tasdiqlaydi")
+        return
+
+    # yetkazish biriktirish (ega lokatsiya tashlagandan keyin)
+    if data.startswith("yetk_"):
+        val = data[5:]
+        if val == "bekor":
+            _pending_loc.pop(from_id, None)
+            answer_cb(cb_id, "Bekor qilindi")
+            _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+                 message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+            return
+        loc = _pending_loc.get(from_id)
+        if not loc:
+            answer_cb(cb_id, "Lokatsiya topilmadi, qayta yuboring")
+            return
+        car_id = int(val)
+        car = [c for c in db.all_cars() if c["id"] == car_id]
+        car = car[0] if car else None
+        if not car:
+            answer_cb(cb_id, "Haydovchi topilmadi")
+            return
+        # yetkazish yaratamiz
+        tok = db.yetkazish_qosh(car_id, loc["lat"], loc["lon"], "")
+        base = WEBAPP_URL.rstrip("/")
+        url = f"{base}/yol/{tok}"
+        # haydovchiga xabar
+        hayd = [u for u in db.all_users() if u.get("car_id") == car_id and u["role"] == "haydovchi"]
+        xabar = (f"📦 <b>Yangi yetkazib berish!</b>\n\n"
+                 f"🚚 {car['name']}\n"
+                 f"📍 Mahsulotni belgilangan manzilga yetkazing\n"
+                 f"🗺 Manzil: https://www.google.com/maps?q={loc['lat']},{loc['lon']}\n\n"
+                 f"Mijoz sizni jonli kuzatmoqda — GPS yoniq bo'lsin!")
+        for h in hayd:
+            send(h["tg_id"], xabar)
+        _pending_loc.pop(from_id, None)
+        answer_cb(cb_id, "Biriktirildi!")
+        _api("editMessageReplyMarkup", chat_id=cb["message"]["chat"]["id"],
+             message_id=cb["message"]["message_id"], reply_markup={"inline_keyboard": []})
+        hayd_txt = "✅ Haydovchiga xabar yuborildi" if hayd else "⚠️ Haydovchi botga ulanmagan"
+        send(OWNER_ID, f"✅ <b>{car['driver']}</b> ({car['name']})ga yetkazish biriktirildi!\n{hayd_txt}\n\n📎 Mijozga havola:\n{url}")
         return
 
     # ok_haydovchi_123 / ok_nazoratchi_123 / ok_rad_123
@@ -269,6 +336,8 @@ def run_polling():
                 offset = upd["update_id"] + 1
                 if "message" in upd and upd["message"].get("text", "").startswith("/start"):
                     handle_start(upd["message"]["from"])
+                elif "message" in upd and "location" in upd["message"]:
+                    handle_location(upd["message"])
                 elif "callback_query" in upd:
                     handle_callback(upd["callback_query"])
         except Exception as e:

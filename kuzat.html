@@ -155,14 +155,15 @@ function initMap(){
   try{
     if(typeof L==='undefined') return;
     map=L.map('map',{zoomControl:false,attributionControl:false}).setView([41.311,69.24],15);
-    // Ko'cha (sifatli, silliq — CartoDB Voyager)
-    const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+    // Ko'cha — CartoDB (sifatli), yuklanmasa OpenStreetMap (ishonchli)
+    const kocha=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{maxZoom:20,subdomains:'abcd'});
+    let xato=0;
+    kocha.on('tileerror',()=>{ if(xato++<2){ map.removeLayer(kocha); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map); } });
+    kocha.addTo(map);
     // Sputnik (yo'ldosh rasm — Esri)
     const sput=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20});
-    // Sputnik + ko'cha nomlari (gibrid)
-    const yozuv=L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}.png',{maxZoom:20,opacity:.9});
-    const gibrid=L.layerGroup([sput,yozuv]);
-    L.control.layers({"🗺 Ko'cha":kocha,"🛰 Sputnik":sput,"🛰 Sputnik+nom":gibrid},null,{position:'topright'}).addTo(map);
+    const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+    L.control.layers({"🗺 Ko'cha":kocha,"🛰 Sputnik":sput,"🗺 OSM":osm},null,{position:'topright'}).addTo(map);
     trail=L.polyline([],{color:'#2a6df0',weight:5,opacity:.9,lineJoin:'round',lineCap:'round'}).addTo(map);
   }catch(e){ map=null; }
 }
@@ -237,7 +238,7 @@ async function flush(){
 }
 
 // ==== YETKAZISH — mijozga yo'l ko'rsatish (Yandex kabi) ====
-let mijozMk=null, yolLine=null, yetkazishBox=null;
+let mijozMk=null, yolLine=null, yolBg=null, yetkazishBox=null;
 async function handleYetkazish(y, oxirgi){
   if(!y){
     // yetkazish yo'q — tozalash
@@ -247,18 +248,20 @@ async function handleYetkazish(y, oxirgi){
     return;
   }
   if(!map || typeof L==='undefined' || !oxirgi) return;
-  // mijoz markeri
+  // mijoz markeri — Yandex kabi qora nuqta
   const mll=[y.lat,y.lon];
-  if(!mijozMk){ mijozMk=L.marker(mll,{icon:L.divIcon({className:'',html:'<div style="font-size:28px">📍</div>',iconSize:[28,28],iconAnchor:[14,28]})}).addTo(map).bindTooltip('Mijoz'+(y.izoh?': '+y.izoh:''),{permanent:false}); }
+  if(!mijozMk){ mijozMk=L.marker(mll,{icon:L.divIcon({className:'',html:'<div style="width:20px;height:20px;border-radius:50%;background:#1a1a1a;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map).bindTooltip('📍 Mijoz'+(y.izoh?': '+y.izoh:''),{permanent:false}); }
   else mijozMk.setLatLng(mll);
-  // yo'l (OSRM)
+  // yo'l (OSRM) — Yandex kabi yashil, qora kant
   try{
     const u=`https://router.project-osrm.org/route/v1/driving/${oxirgi.lon},${oxirgi.lat};${y.lon},${y.lat}?overview=full&geometries=geojson`;
     const rr=await fetch(u); const dd=await rr.json();
     if(dd.routes&&dd.routes[0]){
       const coords=dd.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
       if(yolLine) map.removeLayer(yolLine);
-      yolLine=L.polyline(coords,{color:'#2a6df0',weight:6,opacity:.8}).addTo(map);
+      if(yolBg) map.removeLayer(yolBg);
+      yolBg=L.polyline(coords,{color:'#1a1a1a',weight:9,opacity:.2,lineCap:'round'}).addTo(map);
+      yolLine=L.polyline(coords,{color:'#1DB93C',weight:6,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(map);
       const daq=Math.max(1,Math.round(dd.routes[0].duration/60));
       const km=(dd.routes[0].distance/1000).toFixed(1);
       showYetkazish(daq,km,y.izoh);
@@ -268,15 +271,18 @@ async function handleYetkazish(y, oxirgi){
 function showYetkazish(daq,km,izoh){
   if(!yetkazishBox){
     yetkazishBox=document.createElement('div');
-    yetkazishBox.style.cssText='position:fixed;top:56px;left:12px;right:12px;z-index:15;background:#16232eef;backdrop-filter:blur(8px);border:1px solid #2a6df0;border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.5)';
+    yetkazishBox.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:20;background:#fff;border-radius:22px 22px 0 0;padding:16px 20px 22px;box-shadow:0 -4px 24px rgba(0,0,0,.2)';
     document.body.appendChild(yetkazishBox);
   }
-  yetkazishBox.innerHTML=`<div style="display:flex;align-items:center;gap:12px">
-    <div style="font-size:26px">📦</div>
-    <div style="flex:1"><div style="font-weight:800;font-size:15px;color:#5b9bf0">Mijozga yetkazish${izoh?' · '+izoh:''}</div>
-      <div style="font-size:13px;color:#8aa0a8">🕐 <b style="color:#eaf2ee">${daq} daqiqa</b> · 📏 ${km} km</div></div>
-    <button onclick="yetkazishYetdi()" style="background:#1E7A5A;border:none;color:#fff;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer">✅ Yetdim</button>
-  </div>`;
+  yetkazishBox.innerHTML=`
+    <div style="width:38px;height:4px;background:#dcdcdc;border-radius:3px;margin:0 auto 14px"></div>
+    <div style="display:inline-flex;align-items:center;gap:6px;background:#e3f0ff;color:#1565c0;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;margin-bottom:12px">📦 Mijozga yetkazish</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-size:24px;font-weight:800;color:#1a1a1a">~${daq} daqiqa</div>
+      <div style="background:#f2f2f0;border-radius:8px;padding:7px 13px;font-weight:800;font-size:15px;color:#1a1a1a">${km} km</div>
+    </div>
+    <div style="font-size:14px;color:#8a8a8a;margin-bottom:16px">📍 ${izoh||'Belgilangan manzil'}</div>
+    <button onclick="yetkazishYetdi()" style="width:100%;padding:16px;border:none;border-radius:16px;background:#1DB93C;color:#fff;font-size:16px;font-weight:800;cursor:pointer">✅ Yetib keldim</button>`;
 }
 window.yetkazishYetdi=async function(){
   if(!confirm('Mijozga yetkazib berdingizmi?')) return;
@@ -284,6 +290,7 @@ window.yetkazishYetdi=async function(){
   if(yetkazishBox){ yetkazishBox.remove(); yetkazishBox=null; }
   if(mijozMk&&map){ map.removeLayer(mijozMk); mijozMk=null; }
   if(yolLine&&map){ map.removeLayer(yolLine); yolLine=null; }
+  if(yolBg&&map){ map.removeLayer(yolBg); yolBg=null; }
   toast('✅ Yetkazildi — rahmat!');
 }
 function updateOff(n){ offlineCount=n;

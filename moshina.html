@@ -1102,6 +1102,14 @@ function renderGps(){
     const st = online
       ? `<span class="on-dot" style="background:var(--green)"></span><span style="color:var(--green)">Onlayn · yo'lda</span>`
       : `<span class="on-dot" style="background:var(--red)"></span><span style="color:var(--red)">Oflayn${yosh!=null?' · '+Math.round(yosh)+' daq oldin':''}</span>`;
+    const yetkBadge = h.yetkazish
+      ? `<div style="background:#1e3a5f;border:1px solid #2a6df0;border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="gShowMap(${h.id})">
+          <span style="font-size:18px">📦</span>
+          <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#5b9bf0">Mijozga ketmoqda${h.yetkazish.izoh?' · '+h.yetkazish.izoh:''}</div>
+          <div style="font-size:11px;color:var(--muted)">Yetkazish faol — xaritada ko'rish</div></div>
+          <span style="color:#5b9bf0">→</span>
+        </div>`
+      : '';
     return `<div class="hcard">
       <div class="hrow">
         <div class="hico">🚚</div>
@@ -1110,6 +1118,7 @@ function renderGps(){
           <div style="font-size:12px;margin-top:2px">${st}</div>
         </div>
       </div>
+      ${yetkBadge}
       <div style="background:var(--panel2);border-radius:10px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="font-size:13px;color:var(--muted)">🔑 GPS kod:</div>
         <div style="font-size:20px;font-weight:800;letter-spacing:2px;color:var(--gold)">${h.kod||'—'}</div>

@@ -353,12 +353,17 @@ def api_haydovchilar():
     for c in db.all_cars():
         g = db.gps_oxirgi(c["id"])
         online = db.car_online(c["id"])
+        y = db.yetkazish_faol_car(c["id"])
+        yetk = None
+        if y:
+            yetk = {"lat":y["mlat"], "lon":y["mlon"], "izoh":y.get("izoh") or "", "token":y["token"]}
         res.append({
             "id":c["id"], "ism":c["driver"], "moshina":c["name"], "raqam":c.get("raqam",""),
             "online":online, "gps":g,
             "yosh_daq": (round(db.gps_age_daqiqa(g["vaqt"]),1) if g else None),
             "kod": db.car_gps_kod(c["id"]),
             "tel": c.get("tel") or "",
+            "yetkazish": yetk,
         })
     return jsonify({"haydovchilar":res})
 
