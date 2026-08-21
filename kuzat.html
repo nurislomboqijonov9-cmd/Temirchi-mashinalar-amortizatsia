@@ -322,7 +322,25 @@ async function start(){
   tracking=true;
   $('s_holat').textContent="Yoniq"; $('s_holat').className="v on";
   showWarn("⏳ GPS qidirilmoqda... biroz kuting");
-  // birinchi joyni tez olish
+  // APK ichida bo'lsa — background GPS plagin (ekran o'chsa ham 100% ishlaydi)
+  if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation){
+    try{
+      const BG=window.Capacitor.Plugins.BackgroundGeolocation;
+      await BG.addWatcher({
+        backgroundMessage:"GPS yoniq — yetkazib berish kuzatuvi",
+        backgroundTitle:"TEMIRCHI ishlayapti",
+        requestPermissions:true, stale:false, distanceFilter:10
+      }, function(loc,err){
+        if(err){ if(err.code==="NOT_AUTHORIZED"){ showWarn("⚠️ GPS ruxsati kerak — sozlamalardan bering"); } return; }
+        if(loc){ hideWarn(); onPos({coords:{latitude:loc.latitude,longitude:loc.longitude,accuracy:loc.accuracy||20}}); }
+      });
+      // APK'da watchPosition shart emas — plagin ishlaydi
+      if(!window._iv){ window._iv=true; setInterval(flush,20000); setInterval(ping,60000); }
+      ping(); flush();
+      return;
+    }catch(e){ /* plagin xato -> oddiy GPS */ }
+  }
+  // birinchi joyni tez olish (brauzer / plagin yo'q)
   navigator.geolocation.getCurrentPosition(onPos, onErr, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
