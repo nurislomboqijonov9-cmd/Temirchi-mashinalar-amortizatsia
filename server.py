@@ -5,6 +5,19 @@ import db, bot
 app = Flask(__name__)
 db.init_db()
 
+# CORS — APK (capacitor) va boshqa manbalardan so'rovga ruxsat
+@app.after_request
+def qosh_cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Code, X-Token"
+    return resp
+
+@app.route("/<path:_p>", methods=["OPTIONS"])
+@app.route("/", methods=["OPTIONS"])
+def cors_preflight(_p=None):
+    return ("", 204)
+
 DATA_DIR2 = os.environ.get("DATA_DIR", "/data")
 if not os.path.isdir(DATA_DIR2):
     DATA_DIR2 = os.path.dirname(os.path.abspath(__file__))
