@@ -65,7 +65,19 @@ async function yukla(){
   // ===== Yurgan yo'l chizig'i (aniq — qora kant + oq chiziq) =====
   const line=pts.map(p=>[p.lat,p.lon]);
   L.polyline(line,{color:'#06233d',weight:8,opacity:.6}).addTo(layer);       // kant (kontrast)
-  L.polyline(line,{color:'#ffffff',weight:4,opacity:.95}).addTo(layer);      // asosiy chiziq
+  const asosiy=L.polyline(line,{color:'#ffffff',weight:4,opacity:.95}).addTo(layer);      // asosiy chiziq
+  // yo'lga bosilganda — soat nechada shu yerda edi
+  asosiy.on('click',function(e){
+    let eng=0,md=1e9;
+    for(let i=0;i<pts.length;i++){ const d=Math.abs(pts[i].lat-e.latlng.lat)+Math.abs(pts[i].lon-e.latlng.lng); if(d<md){md=d;eng=i;} }
+    L.popup().setLatLng([pts[eng].lat,pts[eng].lon]).setContent('🕐 Soat <b>'+fmt(pts[eng].vaqt)+'</b> da shu yerda edi').openOn(map);
+  });
+  // yo'l bo'ylab vaqt belgilari (soat ko'rsatadi)
+  const qadam=Math.max(1,Math.floor(pts.length/8));
+  for(let i=qadam;i<pts.length-1;i+=qadam){
+    L.circleMarker([pts[i].lat,pts[i].lon],{radius:3,color:'#2a6df0',fillColor:'#fff',fillOpacity:1,weight:2})
+      .bindTooltip('🕐 '+fmt(pts[i].vaqt),{permanent:false,direction:'top'}).addTo(layer);
+  }
   L.circleMarker(line[0],{radius:7,color:'#fff',fillColor:'#2ecc71',fillOpacity:1,weight:2}).bindPopup('▶️ Boshi '+fmt(pts[0].vaqt)).addTo(layer);
   // oxirgi nuqta — rangli gruz moshina (hozirgi joy)
   const trukHtml='<div style="filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))"><svg width="48" height="34" viewBox="0 0 48 34"><ellipse cx="24" cy="31" rx="17" ry="3" fill="rgba(0,0,0,.15)"/><rect x="3" y="9" width="26" height="15" rx="2.5" fill="#F5A623"/><rect x="3" y="9" width="26" height="5" rx="2.5" fill="#E8951C"/><rect x="29" y="12" width="13" height="12" rx="2.5" fill="#EE5A3A"/><rect x="31" y="14" width="8" height="5" rx="1.5" fill="#BEE3F8"/><circle cx="12" cy="26" r="4" fill="#2D2D2D"/><circle cx="12" cy="26" r="1.8" fill="#888"/><circle cx="34" cy="26" r="4" fill="#2D2D2D"/><circle cx="34" cy="26" r="1.8" fill="#888"/></svg></div>';

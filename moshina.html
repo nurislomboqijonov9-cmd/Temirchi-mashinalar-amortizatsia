@@ -216,8 +216,17 @@
   <!-- GPS -->
   <div id="view-gps" class="view hidden">
     <h2><span class="bar"></span>Haydovchilar — jonli holat</h2>
+    <button onclick="gTarix()" style="width:100%;margin-bottom:12px;padding:12px;border:none;border-radius:12px;background:var(--panel2);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--line)">📋 Yetkazishlar tarixi</button>
     <div id="gpsList"></div>
     <div class="hint-gps">💡 <b>Xaritada</b> — haydovchi yo'li va to'xtashlari · <b>Mijozga ssilka</b> — mijoz manzilini belgilab, jonli kuzatuv ssilkasi (Yandex kabi)</div>
+  </div>
+
+  <!-- YETKAZISHLAR TARIXI MODAL -->
+  <div class="gmodal" id="gtarixModal">
+    <div class="gm-box" style="max-width:520px">
+      <div class="gm-head"><b>📋 Yetkazishlar tarixi</b><button class="x" onclick="gCloseModal('gtarixModal')">✕</button></div>
+      <div id="gtarixList" style="padding:8px 4px;max-height:70vh;overflow:auto"></div>
+    </div>
   </div>
 
   <!-- CARS -->
@@ -291,6 +300,7 @@
     </div>
   </div>
   <button onclick="haydOchYol()" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:12px;background:#fff;color:#1565c0;font-size:15px;font-weight:800;cursor:pointer">🗺 Yo'lni ochish + GPS</button>
+  <a id="haydMijozTel" href="#" style="display:none;margin-top:8px;padding:12px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;font-size:14px;font-weight:700;text-align:center;text-decoration:none">📞 Mijozga qo'ng'iroq</a>
 </div>
 
 <!-- MODAL -->
@@ -398,6 +408,7 @@
     <div class="gsheet-body">
       <div class="ssilka-info">📍 Xaritani bosib <b>mijoz manzilini</b> belgilang. Haydovchiga xabar boradi, mijozga esa jonli kuzatuv ssilkasi.</div>
       <input id="gssilkaSoat" class="pf" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font-size:15px;margin-bottom:8px" placeholder="🕐 Yetkazish vaqti (masalan: 15:00, ixtiyoriy)">
+      <input id="gssilkaTel" class="pf" type="tel" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font-size:15px;margin-bottom:8px" placeholder="📞 Mijoz telefon raqami (ixtiyoriy)">
       <input id="gssilkaIzoh" class="pf" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px" placeholder="📝 Izoh — mijoz ismi/mahsulot (ixtiyoriy)">
       <button class="btn-save" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--gold);color:#2e1c04;font-weight:700;cursor:pointer" id="gssilkaGen">🔗 Ssilka yaratish + haydovchiga xabar</button>
       <div class="ssilka-result" id="gssilkaResult">
@@ -1200,7 +1211,8 @@ document.getElementById('gssilkaGen').addEventListener('click',async()=>{
   const ll=gMijoz.getLatLng();
   const soat=(document.getElementById('gssilkaSoat').value||'').trim();
   const izoh=(document.getElementById('gssilkaIzoh').value||'').trim();
-  const res=await apiPost('/api/yetkazish',{car_id:gSsilkaCar,lat:ll.lat,lon:ll.lng,izoh,soat});
+  const mijoz_tel=(document.getElementById('gssilkaTel').value||'').trim();
+  const res=await apiPost('/api/yetkazish',{car_id:gSsilkaCar,lat:ll.lat,lon:ll.lng,izoh,soat,mijoz_tel});
   if(res&&res.url){
     document.getElementById('gssilkaUrl').textContent=res.url;
     document.getElementById('gssilkaResult').classList.add('show');
@@ -1262,6 +1274,30 @@ window.gTraccar=function(cid){
 }
 window.gCloseModal=function(id){ document.getElementById(id).classList.remove('on'); }
 window.gShowMap=gShowMap; window.gShowSsilka=gShowSsilka;
+// Yetkazishlar tarixi
+window.gTarix=async function(){
+  document.getElementById('gtarixModal').classList.add('on');
+  const el=document.getElementById('gtarixList');
+  el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Yuklanmoqda...</div>';
+  try{
+    const r=await fetch('/api/yetkazish_tarix?code='+encodeURIComponent(CODE()));
+    const d=await r.json();
+    if(!d.tarix||!d.tarix.length){ el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Hali yetkazish yo\'q</div>'; return; }
+    el.innerHTML=d.tarix.map(y=>{
+      const holat=y.holat==='yakunlandi'?'<span style="color:var(--green)">✅ Yetkazildi</span>':'<span style="color:#e0a24a">🚚 Yo\'lda</span>';
+      const vaqt=(y.created||'').slice(5,16).replace('T',' ');
+      const yakun=y.yakun?(' → '+(y.yakun||'').slice(11,16)):'';
+      const tel=y.mijoz_tel?`<a href="tel:${y.mijoz_tel}" style="color:var(--steel)">📞 ${y.mijoz_tel}</a>`:'';
+      return `<div style="background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <b>${y.haydovchi||y.moshina}</b>${holat}
+        </div>
+        <div style="font-size:13px;color:var(--muted)">📍 ${y.izoh||'Manzil'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">🕐 ${vaqt}${yakun} &nbsp; ${tel}</div>
+      </div>`;
+    }).join('');
+  }catch(e){ el.innerHTML='<div style="text-align:center;padding:20px;color:var(--red)">Xato</div>'; }
+}
 document.querySelectorAll('.gmodal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
 
 function switchView(v){
@@ -1314,6 +1350,9 @@ async function haydYetkazishTekshir(){
     const d=await r.json();
     if(d.yetkazish){
       document.getElementById('haydYetkazishManzil').textContent=d.yetkazish.izoh||'Belgilangan manzilga yeting';
+      const telBtn=document.getElementById('haydMijozTel');
+      if(d.yetkazish.mijoz_tel){ telBtn.href='tel:'+d.yetkazish.mijoz_tel; telBtn.style.display='block'; telBtn.textContent='📞 Mijozga qo\'ng\'iroq: '+d.yetkazish.mijoz_tel; }
+      else { telBtn.style.display='none'; }
       box.style.display='block';
     }else{ box.style.display='none'; }
   }catch(e){}

@@ -445,7 +445,7 @@ def api_haydovchi_yetkazish():
     cid=int(request.args.get("id",0))
     y=db.yetkazish_faol_car(cid)
     if y:
-        return jsonify({"yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"]}})
+        return jsonify({"yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"],"mijoz_tel":y.get("mijoz_tel") or ""}})
     return jsonify({"yetkazish":None})
 
 # haydovchi telefon raqamini saqlash
@@ -544,7 +544,8 @@ def api_yetkazish():
     lat=float(b["lat"]); lon=float(b["lon"])
     izoh=b.get("izoh") or ""
     soat=b.get("soat") or ""  # mijozga yetkazish vaqti (ixtiyoriy)
-    tok=db.yetkazish_qosh(car_id, lat, lon, izoh)
+    mijoz_tel=(b.get("mijoz_tel") or "").strip()  # mijoz telefon raqami (ixtiyoriy)
+    tok=db.yetkazish_qosh(car_id, lat, lon, izoh, mijoz_tel)
     base=os.environ.get("WEBAPP_URL","").rstrip("/")
     url=f"{base}/yol/{tok}"
     # haydovchiga Telegram xabar
@@ -566,6 +567,21 @@ def api_yetkazish():
             _tg_msg(OWNER_ID, f"⚠️ {car['name']} haydovchisi botga ulanmagan — xabar yuborilmadi. Havolani qo'lda bering.")
     return jsonify({"ok":True, "token":tok, "url":url})
 
+@app.route("/api/yetkazish_tarix")
+def api_yetkazish_tarix():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    cid=request.args.get("id")
+    rows=db.yetkazish_tarix(int(cid) if cid else None, 100)
+    cars={c["id"]:c for c in db.all_cars()}
+    out=[]
+    for r in rows:
+        c0=cars.get(r["car_id"])
+        out.append({"token":r["token"],"izoh":r.get("izoh") or "","mijoz_tel":r.get("mijoz_tel") or "",
+                    "holat":r["holat"],"created":r.get("created") or "","yakun":r.get("yakun") or "",
+                    "lat":r["mlat"],"lon":r["mlon"],
+                    "haydovchi":(c0["driver"] if c0 else ""),"moshina":(c0["name"] if c0 else "")})
+    return jsonify({"tarix":out})
+
 @app.route("/api/yetkazish_holat")
 def api_yetkazish_holat():
     # haydovchi token bilan -> faol yetkazish bormi
@@ -576,7 +592,7 @@ def api_yetkazish_holat():
     y = db.yetkazish_faol_car(car["id"])
     g = db.gps_oxirgi(car["id"])
     if y:
-        return jsonify({"ok":True, "yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"]},
+        return jsonify({"ok":True, "yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"],"mijoz_tel":y.get("mijoz_tel") or ""},
                         "haydovchi_gps":g})
     return jsonify({"ok":True, "yetkazish":None, "haydovchi_gps":g})
 

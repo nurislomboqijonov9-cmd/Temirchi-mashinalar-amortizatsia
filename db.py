@@ -119,6 +119,12 @@ def init_db():
             mlat REAL, mlon REAL, izoh TEXT,
             holat TEXT DEFAULT 'faol', created TEXT, yakun TEXT
         )""")
+        # migratsiya: mijoz_tel ustuni (eski bazaga)
+        try:
+            cols=[r[1] for r in c.execute("PRAGMA table_info(yetkazish)").fetchall()]
+            if "mijoz_tel" not in cols:
+                c.execute("ALTER TABLE yetkazish ADD COLUMN mijoz_tel TEXT")
+        except Exception: pass
         c.commit()
 
 # ---------- users ----------
@@ -434,11 +440,11 @@ def gps_age_daqiqa(vaqt):
     except: return None
 
 # yetkazish (mijozga jonli ssilka)
-def yetkazish_qosh(car_id, lat, lon, izoh=None):
+def yetkazish_qosh(car_id, lat, lon, izoh=None, mijoz_tel=None):
     tok=secrets.token_urlsafe(8)
     with _lock, _conn() as c:
-        c.execute("INSERT INTO yetkazish(token,car_id,mlat,mlon,izoh,holat,created) VALUES(?,?,?,?,?,'faol',?)",
-                  (tok,int(car_id),float(lat),float(lon),izoh,now_tk().isoformat()))
+        c.execute("INSERT INTO yetkazish(token,car_id,mlat,mlon,izoh,mijoz_tel,holat,created) VALUES(?,?,?,?,?,?,'faol',?)",
+                  (tok,int(car_id),float(lat),float(lon),izoh,mijoz_tel,now_tk().isoformat()))
         c.commit()
     return tok
 
@@ -458,6 +464,15 @@ def yetkazish_yakunla(token):
     with _lock, _conn() as c:
         c.execute("UPDATE yetkazish SET holat='yakunlandi', yakun=? WHERE token=?", (now_tk().isoformat(),token))
         c.commit()
+
+def yetkazish_tarix(car_id=None, limit=100):
+    """Yetkazishlar tarixi — kim, qachon, qayerga (yakunlangan + faol)."""
+    with _conn() as c:
+        if car_id:
+            rows=c.execute("SELECT * FROM yetkazish WHERE car_id=? ORDER BY created DESC LIMIT ?",(int(car_id),limit)).fetchall()
+        else:
+            rows=c.execute("SELECT * FROM yetkazish ORDER BY created DESC LIMIT ?",(limit,)).fetchall()
+        return [dict(r) for r in rows]
 
 def set_car_tel(car_id, tel):
     with _lock, _conn() as c:
