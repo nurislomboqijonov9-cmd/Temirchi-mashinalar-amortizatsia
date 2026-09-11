@@ -1421,37 +1421,50 @@ document.getElementById('roleBtn').addEventListener('click',()=>{if(ROLE==="ega"
 // kattalashtirish (fullscreen) — Telegram ichida yoki brauzerda
 const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 let tgFull = false;
+function brauzerFS(btn){
+  const el=document.documentElement;
+  const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+  if(!fsEl){
+    const req=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+    if(req){ try{ req.call(el); btn.textContent='⤡'; }catch(e){ alert("To'liq ekran ochilmadi: "+e.message); } }
+    else alert("Bu qurilma to'liq ekranni qo'llab-quvvatlamaydi.");
+  } else {
+    const ex=document.exitFullscreen||document.webkitExitFullscreen;
+    if(ex){ ex.call(document); btn.textContent='⛶'; }
+  }
+}
 document.getElementById('fsBtn').addEventListener('click',()=>{
   const btn = document.getElementById('fsBtn');
-  // Telegram ichida bo'lsa -> Telegram fullscreen
-  if(TG && TG.platform && TG.platform!=='unknown'){
-    try{
-      if(!tgFull){
-        if(TG.requestFullscreen) TG.requestFullscreen();
-        else if(TG.expand) TG.expand();
-        tgFull=true; btn.textContent='⤡';
-      } else {
-        if(TG.exitFullscreen) TG.exitFullscreen();
-        tgFull=false; btn.textContent='⛶';
-      }
-    }catch(e){ try{ TG.expand(); }catch(_){} }
-    return;
+  const plat = TG && TG.platform ? TG.platform : '';
+  // Kompyuter (Telegram Desktop) / brauzer -> BRAUZER fullscreen (ishonchli)
+  if(!TG || plat==='tdesktop' || plat==='web' || plat==='weba' || plat==='webk' || plat==='unknown' || plat===''){
+    brauzerFS(btn); return;
   }
-  // Brauzerda -> oddiy fullscreen
-  if(!document.fullscreenElement){
-    document.documentElement.requestFullscreen().catch(()=>{});
-    btn.textContent='⤡';
-  } else {
-    document.exitFullscreen().catch(()=>{});
-    btn.textContent='⛶';
-  }
+  // Mobil Telegram (android/ios) -> Telegram fullscreen, bo'lmasa brauzer
+  try{
+    const verOk = TG.isVersionAtLeast && TG.isVersionAtLeast('8.0');
+    if(!tgFull){
+      if(verOk && TG.requestFullscreen){ TG.requestFullscreen(); tgFull=true; btn.textContent='⤡'; }
+      else { if(TG.expand) TG.expand(); brauzerFS(btn); }
+    } else {
+      if(TG.exitFullscreen) TG.exitFullscreen();
+      tgFull=false; btn.textContent='⛶';
+    }
+  }catch(e){ brauzerFS(btn); }
 });
 document.addEventListener('fullscreenchange',()=>{
-  document.getElementById('fsBtn').textContent = document.fullscreenElement ? '⤡' : '⛶';
+  const b=document.getElementById('fsBtn'); if(b) b.textContent = (document.fullscreenElement||document.webkitFullscreenElement) ? '⤡' : '⛶';
 });
-// Telegram ichida ochilganda avtomat kengaytirish
+// Telegram ichida ochilganda avtomat kengaytirish (mobil fullscreen)
 if(TG){
-  try{ TG.ready(); TG.expand(); }catch(e){}
+  try{
+    TG.ready(); TG.expand();
+    const plat = TG.platform||'';
+    if((plat==='android'||plat==='ios') && TG.isVersionAtLeast && TG.isVersionAtLeast('8.0') && TG.requestFullscreen){
+      TG.requestFullscreen(); tgFull=true;
+      const b=document.getElementById('fsBtn'); if(b) b.textContent='⤡';
+    }
+  }catch(e){}
 }
 
 // kurs
