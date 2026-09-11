@@ -64,8 +64,16 @@ def check_code():
     return code == KIRISH_KODI
 
 # ---------- static: web ilova ----------
-@app.route("/")
+@app.route("/", methods=["GET","POST"])
 def index():
+    # Traccar Client ba'zan bosh / ga GPS yuboradi (lat/lon bo'lsa - osmand kabi qabul qilamiz)
+    q = dict(request.args)
+    if request.method == "POST":
+        try:
+            for k,v in request.form.items(): q.setdefault(k,v)
+        except Exception: pass
+    if (q.get("id") or q.get("deviceid")) and (q.get("lat") or q.get("location")):
+        return _osmand_qabul(q)
     return send_from_directory(".", "kirish.html")
 
 @app.route("/moshina")
@@ -326,6 +334,9 @@ def osmand():
         try:
             for k,v in request.form.items(): q.setdefault(k,v)
         except Exception: pass
+    return _osmand_qabul(q)
+
+def _osmand_qabul(q):
     dev = (q.get("id") or q.get("deviceid") or "").strip()
     car = db.car_by_gps_kod(dev) or db.car_by_kuzat_token(dev)
     if not car:
@@ -341,11 +352,9 @@ def osmand():
     try: acc=float(q.get("accuracy") or q.get("hdop") or 0)
     except Exception: acc=0.0
     # ANIQLIK FILTRI — noaniq nuqtani rad qilamiz (chalkash chizilishni oldini oladi)
-    # 100 metrdan noaniq nuqta = ishonchsiz, saqlmaymiz (lekin "ko'rindi" deb belgilaymiz)
     if acc and acc > 100:
         db.car_seen(car["id"]); return "ok", 200
     vaqt=_osmand_vaqt(q.get("timestamp"))
-    # offline nuqtalar ham qabul qilinadi (Traccar Client internet kelganda eski vaqt bilan yuboradi)
     db.gps_qosh(car["id"], [{"lat":lat,"lon":lon,"vaqt":vaqt,"acc":acc}])
     if db.car_seen(car["id"]) and OWNER_ID:
         _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
