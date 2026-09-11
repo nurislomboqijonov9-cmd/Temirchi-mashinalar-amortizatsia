@@ -27,6 +27,8 @@ html,body{height:100%;font-family:-apple-system,Segoe UI,Roboto,sans-serif;backg
 .call-btn{width:50px;height:50px;border-radius:50%;background:#1DB93C;display:flex;align-items:center;justify-content:center;font-size:24px;border:none;cursor:pointer;flex:none;text-decoration:none;box-shadow:0 3px 10px rgba(29,185,60,.4)}
 .done .eta-main{color:#1B8A3A}
 .car-marker{background:#1a1a1a;border-radius:9px;padding:5px 7px;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+/* moshina belgisi silliq suzadi (sakramaydi) */
+.leaflet-marker-icon.smooth-move{transition:transform 1s linear}
 .dest-marker{width:20px;height:20px;border-radius:50%;background:#1a1a1a;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 </style></head>
 <body>
@@ -58,7 +60,17 @@ const TOKEN=location.pathname.split('/').filter(Boolean).pop();
 const LIGHT='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
 const OSM='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 let map,drvM,cliM,routeLine,routeBg,drvLL=null,done=false,cliLL=null;
-const carIcon=L.divIcon({className:'',html:'<div style="filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))"><svg width="48" height="34" viewBox="0 0 48 34"><ellipse cx="24" cy="31" rx="17" ry="3" fill="rgba(0,0,0,.15)"/><rect x="3" y="9" width="26" height="15" rx="2.5" fill="#F5A623"/><rect x="3" y="9" width="26" height="5" rx="2.5" fill="#E8951C"/><rect x="29" y="12" width="13" height="12" rx="2.5" fill="#EE5A3A"/><rect x="31" y="14" width="8" height="5" rx="1.5" fill="#BEE3F8"/><circle cx="12" cy="26" r="4" fill="#2D2D2D"/><circle cx="12" cy="26" r="1.8" fill="#888"/><circle cx="34" cy="26" r="4" fill="#2D2D2D"/><circle cx="34" cy="26" r="1.8" fill="#888"/></svg></div>',iconSize:[48,34],iconAnchor:[24,28]});
+// Professional moshina belgisi — yuqoridan ko'rinish, yo'nalishga buriladi (Yandex kabi)
+const carIcon=L.divIcon({className:'',html:
+  '<div id="carWrap" style="width:44px;height:44px;transition:transform .8s ease-out">'+
+    '<div style="width:44px;height:44px;border-radius:50%;background:rgba(29,185,60,.18);position:absolute;top:0;left:0"></div>'+
+    '<div style="position:absolute;top:6px;left:6px;width:32px;height:32px;border-radius:50%;background:#1DB93C;box-shadow:0 3px 10px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">'+
+      '<svg id="carSvg" width="22" height="22" viewBox="0 0 24 24" style="transition:transform .8s ease-out">'+
+        '<path d="M12 2 L8 11 L12 9 L16 11 Z" fill="#fff"/>'+  // yuqoriga qaragan strelka (yo'nalish)
+      '</svg>'+
+    '</div>'+
+  '</div>',
+  iconSize:[44,44],iconAnchor:[22,22]});
 const destIcon=L.divIcon({className:'',html:'<div class="dest-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]});
 function initMap(lat,lon){
   map=L.map('map',{zoomControl:false,attributionControl:false}).setView([lat,lon],14);
@@ -94,9 +106,20 @@ async function tick(){
     return;
   }
   if(nuq && map){
-    drvLL=[nuq.lat,nuq.lon];
-    if(!drvM){ drvM=L.marker(drvLL,{icon:carIcon,zIndexOffset:1000}).addTo(map); }
-    else drvM.setLatLng(drvLL);
+    const yangiLL=[nuq.lat,nuq.lon];
+    // yo'nalish (bearing) — oldingi va yangi joydan hisoblaymiz
+    if(drvLL){
+      const b=bearing(drvLL,yangiLL);
+      if(!isNaN(b)){
+        const svg=document.getElementById('carSvg');
+        if(svg) svg.style.transform='rotate('+b+'deg)';
+      }
+    }
+    drvLL=yangiLL;
+    if(!drvM){ drvM=L.marker(drvLL,{icon:carIcon,zIndexOffset:1000}).addTo(map);
+      try{ drvM._icon.classList.add('smooth-move'); }catch(e){}
+    }
+    else drvM.setLatLng(drvLL);  // Leaflet + CSS transition = silliq harakat
     if(cliLL){
       const rt=await osrm(drvLL,cliLL);
       if(rt){
@@ -111,6 +134,14 @@ async function tick(){
       }
     }
   }
+}
+// 2 nuqta orasidagi yo'nalish (gradus, 0=shimol)
+function bearing(a,b){
+  const toR=x=>x*Math.PI/180, toD=x=>x*180/Math.PI;
+  const dLon=toR(b[1]-a[1]);
+  const y=Math.sin(dLon)*Math.cos(toR(b[0]));
+  const x=Math.cos(toR(a[0]))*Math.sin(toR(b[0]))-Math.sin(toR(a[0]))*Math.cos(toR(b[0]))*Math.cos(dLon);
+  return (toD(Math.atan2(y,x))+360)%360;
 }
 tick(); setInterval(tick,8000);
 </script></body></html>

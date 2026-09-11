@@ -281,6 +281,18 @@
   </div>
 </div>
 
+<!-- HAYDOVCHI YETKAZISH BANNER (bot lokatsiya biriktirsa chiqadi) -->
+<div id="haydYetkazish" style="display:none;position:fixed;left:12px;right:12px;top:70px;z-index:30;background:linear-gradient(135deg,#1565c0,#1E7A5A);border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.4)">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:28px">📦</div>
+    <div style="flex:1">
+      <div style="color:#fff;font-weight:800;font-size:15px">Sizga yetkazish biriktirildi!</div>
+      <div style="color:#dbeafe;font-size:13px;margin-top:2px" id="haydYetkazishManzil">Manzilga yeting</div>
+    </div>
+  </div>
+  <button onclick="haydOchYol()" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:12px;background:#fff;color:#1565c0;font-size:15px;font-weight:800;cursor:pointer">🗺 Yo'lni ochish + GPS</button>
+</div>
+
 <!-- MODAL -->
 <div class="modal" id="modal">
   <div class="sheet">
@@ -421,9 +433,9 @@
   }
   document.getElementById('loginBtn').addEventListener('click', tryLogin);
   document.getElementById('loginCode').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
-  // kirish.html dan kelgan kod (localStorage) yoki avval kirgan (sessionStorage)
+  // kirish.html dan kelgan kod (sessionStorage) — brauzer/ilova yopilsa unutadi, qayta kod so'raladi
   let auto = saved;
-  try{ if(!auto && localStorage.getItem('temirchi_rol')==='ega') auto = localStorage.getItem('temirchi_kod'); }catch(e){}
+  try{ if(!auto) auto = sessionStorage.getItem('temirchi_kod'); }catch(e){}
   if(auto){ doEnter(auto).then(ok=>{ if(!ok){ sessionStorage.removeItem('temirchi_auth'); } }); }
 })();
 
@@ -1235,9 +1247,15 @@ window.gTraccar=function(cid){
     `2. Sozlamalarni kiriting:\n`+
     `• Server URL: ${url}\n`+
     `• Device identifier (ID): ${h.kod}\n`+
-    `• Frequency: 30 (sekund)\n`+
-    `• Accuracy: High\n\n`+
+    `• Location accuracy: Highest (eng aniq)\n`+
+    `• Distance: 50 (metr)\n`+
+    `• Interval: 30 (sekund)\n`+
+    `• Offline buffering: YONIQ\n\n`+
     `3. Yuqoridagi "Service status" ni YONIQ qiling\n\n`+
+    `4. Telefon sozlamasi (MUHIM):\n`+
+    `• Batareya: cheklovsiz\n`+
+    `• Autostart: yoniq\n`+
+    `• GPS ruxsat: "Doim"\n\n`+
     `Server manzili nusxa olindi!`;
   navigator.clipboard.writeText(url).catch(()=>{});
   alert(matn);
@@ -1282,7 +1300,27 @@ function applyRole(){
     fab.classList.add('hidden');
     document.getElementById('detailBack').style.display='none';
     curDetail=CURDRIVER;openDetail(CURDRIVER);
+    // haydovchi -> yetkazish bormi (banner)
+    haydYetkazishTekshir();
+    if(!window._hyiv){ window._hyiv=true; setInterval(haydYetkazishTekshir, 12000); }
   }
+}
+// haydovchiga yetkazish biriktirilganmi (banner)
+async function haydYetkazishTekshir(){
+  const box=document.getElementById('haydYetkazish');
+  if(ROLE!=="haydovchi"){ if(box) box.style.display='none'; return; }
+  try{
+    const r=await fetch('/api/haydovchi_yetkazish?code='+encodeURIComponent(CODE())+'&id='+CURDRIVER);
+    const d=await r.json();
+    if(d.yetkazish){
+      document.getElementById('haydYetkazishManzil').textContent=d.yetkazish.izoh||'Belgilangan manzilga yeting';
+      box.style.display='block';
+    }else{ box.style.display='none'; }
+  }catch(e){}
+}
+window.haydOchYol=function(){
+  fetch('/api/haydovchi_kod?code='+encodeURIComponent(CODE())+'&id='+CURDRIVER)
+    .then(r=>r.json()).then(d=>{ if(d.token) location.href='/kuzat/'+d.token; }).catch(()=>{});
 }
 
 // ---------- EVENTS ----------

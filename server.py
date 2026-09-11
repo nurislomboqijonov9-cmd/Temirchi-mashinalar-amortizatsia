@@ -340,10 +340,12 @@ def osmand():
     except Exception: return "ok", 200
     try: acc=float(q.get("accuracy") or q.get("hdop") or 0)
     except Exception: acc=0.0
-    # juda noaniq nuqtani rad qilamiz (uchishni oldini oladi)
-    if acc and acc > 500:
+    # ANIQLIK FILTRI — noaniq nuqtani rad qilamiz (chalkash chizilishni oldini oladi)
+    # 100 metrdan noaniq nuqta = ishonchsiz, saqlmaymiz (lekin "ko'rindi" deb belgilaymiz)
+    if acc and acc > 100:
         db.car_seen(car["id"]); return "ok", 200
     vaqt=_osmand_vaqt(q.get("timestamp"))
+    # offline nuqtalar ham qabul qilinadi (Traccar Client internet kelganda eski vaqt bilan yuboradi)
     db.gps_qosh(car["id"], [{"lat":lat,"lon":lon,"vaqt":vaqt,"acc":acc}])
     if db.car_seen(car["id"]) and OWNER_ID:
         _tg_msg(OWNER_ID, f"🟢 <b>{car.get('driver') or car.get('name')}</b> — qayta ulandi")
@@ -426,6 +428,16 @@ def api_haydovchi_kod():
     if not check_code(): return jsonify({"err":"kod"}), 401
     cid=int(request.args.get("id",0))
     return jsonify({"token":db.car_gps_token(cid), "kod":db.car_gps_kod(cid), "share":db.car_share_token(cid)})
+
+# haydovchiga biriktirilgan faol yetkazish bormi (pul sahifasidagi banner uchun)
+@app.route("/api/haydovchi_yetkazish")
+def api_haydovchi_yetkazish():
+    if not check_code(): return jsonify({"err":"kod"}), 401
+    cid=int(request.args.get("id",0))
+    y=db.yetkazish_faol_car(cid)
+    if y:
+        return jsonify({"yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"]}})
+    return jsonify({"yetkazish":None})
 
 # haydovchi telefon raqamini saqlash
 @app.route("/api/haydovchi_tel", methods=["POST"])
@@ -544,6 +556,20 @@ def api_yetkazish():
         if not hayd and OWNER_ID:
             _tg_msg(OWNER_ID, f"⚠️ {car['name']} haydovchisi botga ulanmagan — xabar yuborilmadi. Havolani qo'lda bering.")
     return jsonify({"ok":True, "token":tok, "url":url})
+
+@app.route("/api/yetkazish_holat")
+def api_yetkazish_holat():
+    # haydovchi token bilan -> faol yetkazish bormi
+    token = request.args.get("token","")
+    car = db.car_by_kuzat_token(token)
+    if not car:
+        return jsonify({"ok":False}), 404
+    y = db.yetkazish_faol_car(car["id"])
+    g = db.gps_oxirgi(car["id"])
+    if y:
+        return jsonify({"ok":True, "yetkazish":{"lat":y["mlat"],"lon":y["mlon"],"izoh":y.get("izoh") or "","token":y["token"]},
+                        "haydovchi_gps":g})
+    return jsonify({"ok":True, "yetkazish":None, "haydovchi_gps":g})
 
 @app.route("/api/yetkazish_yakun", methods=["POST"])
 def api_yetkazish_yakun():
